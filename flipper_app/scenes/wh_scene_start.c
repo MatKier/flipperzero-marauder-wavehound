@@ -4,6 +4,7 @@ typedef enum {
     StartItemHuntAp,
     StartItemSearchDevices,
     StartItemEnterMac,
+    StartItemSaved,
     StartItemSpectrum,
     StartItemBoardInfo,
     StartItemAbout,
@@ -34,6 +35,7 @@ void wh_scene_start_on_enter(void* context) {
     submenu_add_item(
         submenu, "Search devices", StartItemSearchDevices, wh_scene_start_callback, app);
     submenu_add_item(submenu, "Enter MAC", StartItemEnterMac, wh_scene_start_callback, app);
+    submenu_add_item(submenu, "Saved MACs", StartItemSaved, wh_scene_start_callback, app);
     submenu_add_item(submenu, "Channel spectrum", StartItemSpectrum, wh_scene_start_callback, app);
     submenu_add_item(submenu, "Board info", StartItemBoardInfo, wh_scene_start_callback, app);
     submenu_add_item(submenu, "About / Help", StartItemAbout, wh_scene_start_callback, app);
@@ -64,6 +66,9 @@ bool wh_scene_start_on_event(void* context, SceneManagerEvent event) {
         return true;
     case StartItemEnterMac:
         scene_manager_next_scene(app->scene_manager, WhSceneMacInput);
+        return true;
+    case StartItemSaved:
+        scene_manager_next_scene(app->scene_manager, WhSceneSaved);
         return true;
     case StartItemSpectrum:
         scene_manager_next_scene(app->scene_manager, WhSceneSpectrum);

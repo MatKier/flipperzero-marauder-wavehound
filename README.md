@@ -43,13 +43,14 @@ is why Wavehound ships custom firmware rather than building on it.
 | **Hunt access point** | Pick how long to listen: 5, 10 or 30 seconds, or 1, 2 or 5 minutes. Press **OK** during the listen to stop early and jump straight to the results. The board listens on every channel and lists only access points, strongest first, by SSID (hidden networks show their BSSID). Pick one to start hunting. |
 | **Search devices** | First pick the channel: **All channels (hop)**, **Channel 1–13**, or **Channel of nearby AP…**, which runs an AP listen so you can pick a network and borrow its channel. Then the same timed listen (5 s to 5 min, OK to stop early), with access points left out. You get the other transmitters: phones, laptops, smart plugs, cameras. `*` marks a randomized (privacy) MAC that may change over time. Pick one to start hunting. If you fixed the channel, the hunt stays on it. |
 | **Enter MAC** | Type a MAC on the hex keypad (pre-filled with your last target), then pick the channel the same way: **Auto (hop until heard)**, a channel number, or a nearby AP's channel. A chosen channel is pinned: the board stays there even while the target is quiet. Clients always use their AP's channel, so the AP option is the quick way to hunt a known client. |
-| **Hunt screen** | The board parks on the target's channel and reports the signal strength of every frame that MAC sends (beacons, data, probes) every 100 ms. The screen shows a big dBm readout, a COLD/COOL/WARM/HOT! label, a meter with peak marker and a 12-second signal graph. Geiger clicks play through the speaker, faster as the signal gets stronger. `?ch` in the corner means the board is still searching channels. After 8 s of silence it hops again to re-find the target. |
+| **Hunt screen** | The board parks on the target's channel and reports the signal strength of every frame that MAC sends (beacons, data, probes) every 100 ms. The screen shows a big dBm readout, a COLD/COOL/WARM/HOT! label, a meter with peak marker and a 12-second signal graph. Geiger clicks play through the speaker, faster as the signal gets stronger. `?ch` in the corner means the board is still searching channels. After 8 s of silence it hops again to re-find the target. Press **Right** to save the current target as a named favorite. |
+| **Saved MACs** | Favorites you saved from the hunt screen, kept on the SD card. Pick one to hunt it again: the channel picker opens with the saved channel pre-selected, so you can accept it, choose another, or switch to Auto. "Delete saved..." removes entries. Saving a randomized (`*`) MAC is of little use since it rotates. |
 | **Channel spectrum** | The board sweeps channels 1–13 (120 ms dwell each) in promiscuous mode. The Flipper draws one bar per channel with peak hold, a sweep cursor, the busiest channel, and the number of distinct transmitters heard per sweep. You can switch the metric between packets, max dBm and bytes. |
 | **Board info** | Ask the board about itself: firmware build (date + ELF hash), the ESP-IDF version actually running, chip model/revision/cores, radio features, factory MAC, flash size, the app partition and how much of it the current firmware uses, free/min heap, uptime, chip temperature and the last reset reason (handy for spotting brownouts from the 5 V boost). |
 
 Controls:
 
-- **Hunt:** OK = mute/unmute, Left = reset peak, Back = return to the list
+- **Hunt:** OK = mute/unmute, Left = reset peak, Right = save target, Back = return to the list
 - **Searching:** OK = stop now and show the results, Back = cancel
 - **Target list:** the first entry, "~ Search again", reruns the same listen
 - **Spectrum:** OK/Left/Right = change metric, Back = return to menu
@@ -68,7 +69,8 @@ flipper_app/  Flipper external app (uFBT)
   wh_uart.c               USART worker, line splitting, keep-alive ping
   scenes/                 one file per screen (start, listen time, searching,
                           target list, MAC input, hunt, spectrum, board info,
-                          about)
+                          name input, saved MACs, about)
+  wh_store.c              saved MACs: load/add/delete on the SD card
   views/wh_hunt_view.c    hunt screen + Geiger click thread
   views/wh_progress_view.c search progress screen
   views/wh_spectrum_view.c spectrum screen
