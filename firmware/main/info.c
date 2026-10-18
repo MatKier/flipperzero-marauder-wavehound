@@ -96,8 +96,10 @@ void info_report(void)
 {
     proto_sendf("INFO_BEGIN");
 
-    proto_sendf("BI,Firmware,%s", WH_FW_VERSION);
     const esp_app_desc_t *app = esp_app_get_description();
+    /* app->version is set by the build system (version.txt / PROJECT_VER, or
+     * `git describe` for a git checkout); fall back to our static version. */
+    proto_sendf("BI,Firmware,%s", app ? app->version : WH_FW_VERSION);
     if (app) {
         proto_sendf("BI,Built,%s %s", app->date, app->time);
         proto_sendf("BI,IDF (build),%s", app->idf_ver);
