@@ -35,7 +35,7 @@ they do not understand, so ROM boot chatter from the ESP32 is harmless.
 | `DEV,<mac>,<ch>,<rssi>,<frames>,<flags>,<ssid>` | One transmitter, strongest first (max 96). `rssi` is the strongest frame heard. `flags`: `A` access point (sent beacons) or `S` station, plus `R` if the MAC is locally administered (randomized). `ssid` (rest of line) is only set for access points. For APs, `ch` comes from the beacon's DS parameter set. |
 | `DISCOVER_END,<sent>,<total>`                  | Search finished. `total` (matching entries) can exceed `sent`. The board tracks up to 192 transmitters. |
 | `INFO_BEGIN`                                   | Start of an `INFO` reply.             |
-| `BI,<label>,<value>`                           | One board-info row (reply to `INFO`). `value` is the rest of the line and never contains a comma. Labels include Firmware, Built, IDF (run/build), ELF SHA, Chip, Cores, Radio, MAC, Flash, Heap free/min, Uptime, Temp, Reset. |
+| `BI,<label>,<value>`                           | One board-info row (reply to `INFO`). `value` is the rest of the line and never contains a comma. Labels include Firmware, Built, IDF (run/build), ELF SHA, Chip, Cores, Radio, MAC, Flash, App part, App used, Heap free/min, Uptime, Temp, Reset. `App part` is the flash slot reserved for the firmware; `App used` is the running image's actual size and its fill of that slot. |
 | `INFO_END`                                     | End of an `INFO` reply.               |
 
 A transmitter counts as an access point if it sends beacons or probe responses,
