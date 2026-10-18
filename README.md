@@ -77,30 +77,80 @@ docs/PROTOCOL.md  the UART protocol
 
 ## 1. Flash the dev board firmware
 
-Requirements: ESP-IDF 5.x or 6.x **or** PlatformIO (verified building with PlatformIO + ESP-IDF 6.1).
+You can build with **PlatformIO** (simplest: one global install that pulls its
+own ESP-IDF toolchain) or with a full **ESP-IDF** install. PlatformIO is shown
+first and recommended; verified building with PlatformIO + ESP-IDF 6.1.
 
-Put the board in download mode: hold **BOOT**, tap **RESET**, release
-**BOOT**, and connect the board to your PC over its USB-C port.
+### Option A: PlatformIO (recommended)
 
-With ESP-IDF:
+Install PlatformIO Core once, globally (needs Python 3 with `pip`):
+
+```bash
+pip install -U platformio
+```
+
+Check it runs:
+
+```bash
+pio --version
+```
+
+> If `pio` fails with `No module named 'requirements'`, an unrelated PyPI
+> package named `pio` is shadowing PlatformIO's command. Remove it and restore
+> PlatformIO's launcher:
+> `pip uninstall -y pio && pip install --force-reinstall --no-deps platformio`.
+> In any case, `python -m platformio <args>` always calls the real PlatformIO.
+
+Put the board in **download mode**: hold **BOOT**, tap **RESET**, release
+**BOOT**, then connect the board to your PC with its own USB-C port (directly,
+not through the Flipper).
+
+Find the serial port:
+
+```bash
+pio device list
+```
+
+The dev board appears as an Espressif / USB serial device (e.g. `COM5` on
+Windows, `/dev/ttyACM0` or `/dev/ttyUSB0` on Linux, `/dev/cu.usbmodem*` on
+macOS). Note it. The **Flipper also shows up as a serial port**, so be sure to
+pick the ESP32-S2, not the Flipper.
+
+Build, then flash (replace `COM5` with your port):
+
+```bash
+cd firmware
+pio run                                  # build only
+pio run -t upload --upload-port COM5     # build and flash
+```
+
+Omitting `--upload-port` lets PlatformIO auto-detect, but naming it explicitly
+makes sure you never write to the Flipper's port. If the upload can't enter the
+bootloader by itself, redo the BOOT+RESET step right before uploading.
+
+Change pins, baud, LED or max channel (e.g. 11 for US-style regions):
+
+```bash
+cd firmware
+pio run -t menuconfig
+```
+
+### Option B: ESP-IDF
+
+With a full ESP-IDF 5.x/6.x install, from its `idf.py`/export shell and after
+the same BOOT+RESET download-mode step:
 
 ```bash
 cd firmware
 idf.py set-target esp32s2
 idf.py build
 idf.py -p COM5 flash        # use your port
+idf.py menuconfig           # pins, baud, LED, max channel -> Wavehound
 ```
 
-With PlatformIO:
+---
 
-```bash
-cd firmware
-pio run -t upload
-```
-
-Tap **RESET** afterwards to boot the new firmware. Pins, baud rate, LED and
-max channel (11 for US-style regions) are configurable under `idf.py menuconfig`
-→ *Wavehound*.
+Tap **RESET** after flashing to boot the new firmware.
 
 > The defaults assume the official board: UART0 on GPIO43/44 to Flipper
 > pins 13/14, and an active-low RGB LED on GPIO6/5/4 (R/G/B). If your clone
