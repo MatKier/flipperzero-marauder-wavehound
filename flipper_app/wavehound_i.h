@@ -117,7 +117,6 @@ typedef struct {
     /* Saved MACs (favorites), loaded from the SD card at startup. */
     WhSavedMac saved[WH_MAX_SAVED];
     size_t saved_count;
-    bool saved_edit_mode;      /* Saved list is in "pick to edit" mode */
     uint8_t save_channel;      /* channel captured when saving from the hunt */
     char name_buf[WH_SAVED_NAME_MAX]; /* TextInput buffer for the saved/edited name */
 
