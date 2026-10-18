@@ -37,6 +37,9 @@ static const char* const about_text =
     "?ch = still searching\n\n"
     "\e#Spectrum\n"
     "OK/Left/Right: metric\n\n"
+    "\e#Board info\n"
+    "Firmware, chip and\n"
+    "health of the dev board.\n\n"
     "Receive-only. Only hunt\n"
     "devices you own or are\n"
     "allowed to locate.";

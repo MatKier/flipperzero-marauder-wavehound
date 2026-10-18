@@ -15,6 +15,7 @@
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 
+#include "info.h"
 #include "led.h"
 #include "proto.h"
 #include "radio.h"
@@ -132,6 +133,8 @@ static void handle_line(char *line)
         radio_spectrum();
     } else if (strcmp(line, "DISCOVER") == 0) {
         handle_discover(args);
+    } else if (strcmp(line, "INFO") == 0) {
+        info_report();
     } else if (strcmp(line, "FINISH") == 0) {
         radio_finish();
         proto_sendf("OK,FINISH");
