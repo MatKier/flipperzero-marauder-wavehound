@@ -6,6 +6,7 @@
  * strength; the Flipper turns it into a meter, a graph and Geiger clicks.
  */
 #include "wavehound_i.h"
+#include "wh_store.h"
 
 #include <furi_hal.h>
 #include <stdio.h>
@@ -142,6 +143,12 @@ static void wh_on_line(char* line, void* context) {
     /* READY / PONG / OK / ERR only refresh the liveness timestamp. */
 }
 
+/* Hunt view asks (Right key) to save the current target. */
+static void wh_hunt_save_cb(void* context) {
+    WavehoundApp* app = context;
+    view_dispatcher_send_custom_event(app->view_dispatcher, WhEventSaveTarget);
+}
+
 /* ---------- dispatcher plumbing ---------- */
 
 static bool wh_custom_event_callback(void* context, uint32_t event) {
@@ -182,16 +189,22 @@ static WavehoundApp* wh_app_alloc(void) {
     app->byte_input = byte_input_alloc();
     view_dispatcher_add_view(
         app->view_dispatcher, WhViewByteInput, byte_input_get_view(app->byte_input));
+    app->text_input = text_input_alloc();
+    view_dispatcher_add_view(
+        app->view_dispatcher, WhViewTextInput, text_input_get_view(app->text_input));
     app->widget = widget_alloc();
     view_dispatcher_add_view(app->view_dispatcher, WhViewWidget, widget_get_view(app->widget));
     app->progress = wh_progress_view_alloc();
     view_dispatcher_add_view(
         app->view_dispatcher, WhViewProgress, wh_progress_view_get_view(app->progress));
     app->hunt = wh_hunt_view_alloc();
+    wh_hunt_view_set_save_callback(app->hunt, wh_hunt_save_cb, app);
     view_dispatcher_add_view(app->view_dispatcher, WhViewHunt, wh_hunt_view_get_view(app->hunt));
     app->spectrum = wh_spectrum_view_alloc();
     view_dispatcher_add_view(
         app->view_dispatcher, WhViewSpectrum, wh_spectrum_view_get_view(app->spectrum));
+
+    wh_store_load(app);
 
     return app;
 }
@@ -199,12 +212,14 @@ static WavehoundApp* wh_app_alloc(void) {
 static void wh_app_free(WavehoundApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, WhViewSubmenu);
     view_dispatcher_remove_view(app->view_dispatcher, WhViewByteInput);
+    view_dispatcher_remove_view(app->view_dispatcher, WhViewTextInput);
     view_dispatcher_remove_view(app->view_dispatcher, WhViewWidget);
     view_dispatcher_remove_view(app->view_dispatcher, WhViewProgress);
     view_dispatcher_remove_view(app->view_dispatcher, WhViewHunt);
     view_dispatcher_remove_view(app->view_dispatcher, WhViewSpectrum);
     submenu_free(app->submenu);
     byte_input_free(app->byte_input);
+    text_input_free(app->text_input);
     widget_free(app->widget);
     wh_progress_view_free(app->progress);
     wh_hunt_view_free(app->hunt);

@@ -19,8 +19,17 @@ void wh_scene_hunt_on_enter(void* context) {
 }
 
 bool wh_scene_hunt_on_event(void* context, SceneManagerEvent event) {
-    UNUSED(context);
-    UNUSED(event);
+    WavehoundApp* app = context;
+    if(event.type == SceneManagerEventTypeCustom && event.event == WhEventSaveTarget) {
+        /* Remember the channel we are actually locked on (fall back to the
+         * configured one, which may be 0 = auto), then name and save it. */
+        app->save_channel = wh_hunt_view_current_channel(app->hunt);
+        if(app->save_channel == 0) app->save_channel = app->target.channel;
+        const WhTarget* t = &app->target;
+        strlcpy(app->name_buf, t->name[0] ? t->name : t->mac, sizeof(app->name_buf));
+        scene_manager_next_scene(app->scene_manager, WhSceneNameInput);
+        return true;
+    }
     return false;
 }
 

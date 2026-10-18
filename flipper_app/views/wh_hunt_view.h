@@ -6,9 +6,18 @@
 
 typedef struct WhHuntView WhHuntView;
 
+/** Called when the user asks to save the current target (Right key). */
+typedef void (*WhHuntSaveCallback)(void* context);
+
 WhHuntView* wh_hunt_view_alloc(void);
 void wh_hunt_view_free(WhHuntView* hunt);
 View* wh_hunt_view_get_view(WhHuntView* hunt);
+
+/** Register the callback fired when the user presses Right to save the target. */
+void wh_hunt_view_set_save_callback(WhHuntView* hunt, WhHuntSaveCallback cb, void* context);
+
+/** Channel the hunt is currently locked on, or 0 if still hopping/seeking. */
+uint8_t wh_hunt_view_current_channel(WhHuntView* hunt);
 
 /** Reset the view for a new target. */
 void wh_hunt_view_set_target(WhHuntView* hunt, const char* name, uint8_t channel);

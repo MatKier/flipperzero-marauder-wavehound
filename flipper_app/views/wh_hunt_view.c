@@ -37,6 +37,8 @@ struct WhHuntView {
     volatile int8_t geiger_rssi; /* 0 = silent */
     volatile bool sound;
     uint32_t last_heard_tick;
+    WhHuntSaveCallback save_cb;
+    void* save_ctx;
 };
 
 static float rssi_fraction(float rssi) {
@@ -147,6 +149,10 @@ static bool wh_hunt_input(InputEvent* event, void* context) {
         with_view_model(hunt->view, WhHuntModel * m, { m->peak = 0; }, true);
         return true;
     }
+    if(event->key == InputKeyRight) {
+        if(hunt->save_cb) hunt->save_cb(hunt->save_ctx);
+        return true;
+    }
     return false;
 }
 
@@ -242,6 +248,18 @@ void wh_hunt_view_free(WhHuntView* hunt) {
 
 View* wh_hunt_view_get_view(WhHuntView* hunt) {
     return hunt->view;
+}
+
+void wh_hunt_view_set_save_callback(WhHuntView* hunt, WhHuntSaveCallback cb, void* context) {
+    hunt->save_cb = cb;
+    hunt->save_ctx = context;
+}
+
+uint8_t wh_hunt_view_current_channel(WhHuntView* hunt) {
+    uint8_t ch = 0;
+    with_view_model(
+        hunt->view, WhHuntModel * m, { ch = m->locked ? m->channel : 0; }, false);
+    return ch;
 }
 
 void wh_hunt_view_set_target(WhHuntView* hunt, const char* name, uint8_t channel) {
