@@ -11,5 +11,13 @@ void wh_store_load(WavehoundApp* app);
  */
 bool wh_store_add(WavehoundApp* app, const char* name, const char* mac, uint8_t channel);
 
+/** Replace the entry at `index` with new values and persist. */
+void wh_store_update(
+    WavehoundApp* app,
+    size_t index,
+    const char* name,
+    const char* mac,
+    uint8_t channel);
+
 /** Remove the entry at `index` and persist. */
 void wh_store_delete(WavehoundApp* app, size_t index);
