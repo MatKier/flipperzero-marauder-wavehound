@@ -13,6 +13,7 @@ they do not understand, so ROM boot chatter from the ESP32 is harmless.
 | `HUNT,<mac>,<ch>[,PIN]` | Track frames transmitted by `<mac>` on channel `<ch>`. `ch=0` hops until the target is heard. `PIN` (needs `ch>0`) keeps the radio on `<ch>` even when the target goes quiet. |
 | `SPECTRUM`            | Sweep channels 1..N, report per-channel activity.              |
 | `DISCOVER,<seconds>[,ALL\|AP\|STA[,<ch>]]` | Listen for 1-600 s, then report the transmitters heard. `AP` keeps only access points, `STA` keeps everything else, `ALL` (default) keeps both. `<ch>` 1-13 parks the radio on that channel; `0` or omitted hops all channels. |
+| `INFO`                | Report board version, identity and health as an `INFO_BEGIN` / `BI,...` / `INFO_END` block. |
 | `FINISH`              | End a running `DISCOVER` now and report what was heard so far (same `DEV`/`DISCOVER_END` lines). Ignored in other modes. |
 | `STOP`                | Return to idle (radio listening off). Cancels a `DISCOVER` without a report. |
 
@@ -33,6 +34,9 @@ they do not understand, so ROM boot chatter from the ESP32 is harmless.
 | `DP,<elapsed_s>,<count>`                       | Search progress, once per second. `count` only counts entries matching the filter. |
 | `DEV,<mac>,<ch>,<rssi>,<frames>,<flags>,<ssid>` | One transmitter, strongest first (max 96). `rssi` is the strongest frame heard. `flags`: `A` access point (sent beacons) or `S` station, plus `R` if the MAC is locally administered (randomized). `ssid` (rest of line) is only set for access points. For APs, `ch` comes from the beacon's DS parameter set. |
 | `DISCOVER_END,<sent>,<total>`                  | Search finished. `total` (matching entries) can exceed `sent`. The board tracks up to 192 transmitters. |
+| `INFO_BEGIN`                                   | Start of an `INFO` reply.             |
+| `BI,<label>,<value>`                           | One board-info row (reply to `INFO`). `value` is the rest of the line and never contains a comma. Labels include Firmware, Built, IDF (run/build), ELF SHA, Chip, Cores, Radio, MAC, Flash, Heap free/min, Uptime, Temp, Reset. |
+| `INFO_END`                                     | End of an `INFO` reply.               |
 
 A transmitter counts as an access point if it sends beacons or probe responses,
 management frames where it is the BSSID (addr2 == addr3), or data frames coming
