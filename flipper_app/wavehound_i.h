@@ -117,9 +117,16 @@ typedef struct {
     /* Saved MACs (favorites), loaded from the SD card at startup. */
     WhSavedMac saved[WH_MAX_SAVED];
     size_t saved_count;
-    bool saved_delete_mode;    /* Saved list is in "pick to delete" mode */
+    bool saved_edit_mode;      /* Saved list is in "pick to edit" mode */
     uint8_t save_channel;      /* channel captured when saving from the hunt */
-    char name_buf[WH_SAVED_NAME_MAX]; /* TextInput buffer for the saved name */
+    char name_buf[WH_SAVED_NAME_MAX]; /* TextInput buffer for the saved/edited name */
+
+    /* Editing an existing saved entry (the Edit scene's working copy lives in
+     * name_buf, mac_bytes and edit_channel). */
+    bool editing;             /* name/MAC editors update the working copy in place */
+    size_t edit_index;        /* which saved[] entry is being edited */
+    uint8_t edit_channel;     /* working channel while editing */
+    bool edit_channel_mode;   /* Edit scene is showing its channel chooser */
 } WavehoundApp;
 
 /** Send a line to the board (no-op without a UART). */

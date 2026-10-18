@@ -95,6 +95,21 @@ bool wh_store_add(WavehoundApp* app, const char* name, const char* mac, uint8_t 
     return true;
 }
 
+void wh_store_update(
+    WavehoundApp* app,
+    size_t index,
+    const char* name,
+    const char* mac,
+    uint8_t channel) {
+    if(index >= app->saved_count || !name || !name[0] || !mac || !mac[0]) return;
+    WhSavedMac* s = &app->saved[index];
+    strlcpy(s->name, name, sizeof(s->name));
+    sanitize_name(s->name);
+    strlcpy(s->mac, mac, sizeof(s->mac));
+    s->channel = channel;
+    wh_store_write(app);
+}
+
 void wh_store_delete(WavehoundApp* app, size_t index) {
     if(index >= app->saved_count) return;
     for(size_t i = index; i + 1 < app->saved_count; i++) {

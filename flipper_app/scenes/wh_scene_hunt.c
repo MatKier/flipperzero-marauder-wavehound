@@ -27,6 +27,7 @@ bool wh_scene_hunt_on_event(void* context, SceneManagerEvent event) {
         if(app->save_channel == 0) app->save_channel = app->target.channel;
         const WhTarget* t = &app->target;
         strlcpy(app->name_buf, t->name[0] ? t->name : t->mac, sizeof(app->name_buf));
+        app->editing = false; /* adding a new favorite, not editing one */
         scene_manager_next_scene(app->scene_manager, WhSceneNameInput);
         return true;
     }

@@ -29,6 +29,11 @@ bool wh_scene_name_input_on_event(void* context, SceneManagerEvent event) {
     if(event.type != SceneManagerEventTypeCustom || event.event != WhEventNameEntered) {
         return false;
     }
+    if(app->editing) {
+        /* Editing an existing entry: name_buf is updated; return to the editor. */
+        scene_manager_previous_scene(app->scene_manager);
+        return true;
+    }
     wh_store_add(app, app->name_buf, app->target.mac, app->save_channel);
     scene_manager_previous_scene(app->scene_manager); /* back to the hunt */
     return true;

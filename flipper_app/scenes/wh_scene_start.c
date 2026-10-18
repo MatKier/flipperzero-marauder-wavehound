@@ -65,6 +65,7 @@ bool wh_scene_start_on_event(void* context, SceneManagerEvent event) {
         scene_manager_next_scene(app->scene_manager, WhSceneChannelSelect);
         return true;
     case StartItemEnterMac:
+        app->editing = false; /* fresh manual entry, not editing a saved entry */
         scene_manager_next_scene(app->scene_manager, WhSceneMacInput);
         return true;
     case StartItemSaved:
