@@ -10,7 +10,6 @@
 #define EDIT_MAC 201
 #define EDIT_CH 202
 #define EDIT_SAVE 203
-#define EDIT_DELETE 204
 
 static void wh_scene_edit_saved_callback(void* context, uint32_t index) {
     WavehoundApp* app = context;
@@ -40,7 +39,6 @@ static void wh_scene_edit_saved_build_fields(WavehoundApp* app) {
     }
     submenu_add_item(submenu, line, EDIT_CH, wh_scene_edit_saved_callback, app);
     submenu_add_item(submenu, "Save changes", EDIT_SAVE, wh_scene_edit_saved_callback, app);
-    submenu_add_item(submenu, "Delete entry", EDIT_DELETE, wh_scene_edit_saved_callback, app);
     view_dispatcher_switch_to_view(app->view_dispatcher, WhViewSubmenu);
 }
 
@@ -108,11 +106,6 @@ bool wh_scene_edit_saved_on_event(void* context, SceneManagerEvent event) {
         scene_manager_search_and_switch_to_previous_scene(app->scene_manager, WhSceneSaved);
         return true;
     }
-    case EDIT_DELETE:
-        wh_store_delete(app, app->edit_index);
-        app->editing = false;
-        scene_manager_search_and_switch_to_previous_scene(app->scene_manager, WhSceneSaved);
-        return true;
     default:
         return false;
     }
