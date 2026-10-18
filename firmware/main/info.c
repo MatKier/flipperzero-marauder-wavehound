@@ -5,10 +5,13 @@
 
 #include "driver/temperature_sensor.h"
 #include "esp_app_desc.h"
+#include "esp_app_format.h"
 #include "esp_chip_info.h"
 #include "esp_flash.h"
 #include "esp_idf_version.h"
 #include "esp_mac.h"
+#include "esp_ota_ops.h"
+#include "esp_partition.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 
@@ -57,6 +60,38 @@ static bool read_temp_celsius(float *out)
     return ok;
 }
 
+/* Walk the running app image to find how many bytes of flash it occupies.
+ * Best-effort: returns false (and the caller skips the line) on anything
+ * unexpected rather than reporting a wrong number. */
+static bool app_image_bytes(const esp_partition_t *part, size_t *out)
+{
+    esp_image_header_t hdr;
+    if (esp_partition_read(part, 0, &hdr, sizeof(hdr)) != ESP_OK ||
+        hdr.magic != ESP_IMAGE_HEADER_MAGIC) {
+        return false;
+    }
+    size_t pos = sizeof(esp_image_header_t);
+    for (unsigned i = 0; i < hdr.segment_count; i++) {
+        esp_image_segment_header_t seg;
+        if (esp_partition_read(part, pos, &seg, sizeof(seg)) != ESP_OK) {
+            return false;
+        }
+        pos += sizeof(seg) + seg.data_len;
+        if (pos > part->size) {
+            return false;
+        }
+    }
+    pos = (pos + 1 + 15) & ~(size_t)15; /* 1-byte checksum, padded to 16 bytes */
+    if (hdr.hash_appended) {
+        pos += 32; /* appended SHA-256 */
+    }
+    if (pos == 0 || pos > part->size) {
+        return false;
+    }
+    *out = pos;
+    return true;
+}
+
 void info_report(void)
 {
     proto_sendf("INFO_BEGIN");
@@ -103,6 +138,16 @@ void info_report(void)
     uint32_t flash = 0;
     if (esp_flash_get_size(NULL, &flash) == ESP_OK) {
         proto_sendf("BI,Flash,%lu MB", (unsigned long)(flash / (1024 * 1024)));
+    }
+
+    const esp_partition_t *run = esp_ota_get_running_partition();
+    if (run) {
+        proto_sendf("BI,App part,%s %lu KB", run->label, (unsigned long)(run->size / 1024));
+        size_t used;
+        if (app_image_bytes(run, &used)) {
+            proto_sendf("BI,App used,%lu KB (%lu%% of part)", (unsigned long)(used / 1024),
+                        (unsigned long)(run->size ? (uint64_t)used * 100 / run->size : 0));
+        }
     }
 
     proto_sendf("BI,Heap free,%lu B", (unsigned long)esp_get_free_heap_size());
