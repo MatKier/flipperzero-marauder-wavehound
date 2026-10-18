@@ -1,0 +1,9 @@
+firmware/build/
+firmware/.pio/
+firmware/sdkconfig
+firmware/sdkconfig.*
+!firmware/sdkconfig.defaults
+firmware/managed_components/
+firmware/dependencies.lock
+flipper_app/dist/
+flipper_app/.vscode/

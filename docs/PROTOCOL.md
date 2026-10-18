@@ -1,0 +1,48 @@
+# Wavehound UART protocol
+
+Link: Flipper USART (GPIO 13 TX / 14 RX) <-> ESP32-S2 UART0 (GPIO 43 TX / 44 RX),
+115200 baud, 8N1. Every message is one ASCII line terminated by `\n` (a
+preceding `\r` is ignored). Fields are separated by `,`. Both sides ignore lines
+they do not understand, so ROM boot chatter from the ESP32 is harmless.
+
+## Flipper -> board
+
+| Command               | Meaning                                                        |
+|-----------------------|----------------------------------------------------------------|
+| `PING`                | Liveness check. Board answers `PONG,<version>`.                |
+| `HUNT,<mac>,<ch>[,PIN]` | Track frames transmitted by `<mac>` on channel `<ch>`. `ch=0` hops until the target is heard. `PIN` (needs `ch>0`) keeps the radio on `<ch>` even when the target goes quiet. |
+| `SPECTRUM`            | Sweep channels 1..N, report per-channel activity.              |
+| `DISCOVER,<seconds>[,ALL\|AP\|STA[,<ch>]]` | Listen for 1-600 s, then report the transmitters heard. `AP` keeps only access points, `STA` keeps everything else, `ALL` (default) keeps both. `<ch>` 1-13 parks the radio on that channel; `0` or omitted hops all channels. |
+| `FINISH`              | End a running `DISCOVER` now and report what was heard so far (same `DEV`/`DISCOVER_END` lines). Ignored in other modes. |
+| `STOP`                | Return to idle (radio listening off). Cancels a `DISCOVER` without a report. |
+
+`<mac>` is `aa:bb:cc:dd:ee:ff` (case-insensitive).
+
+## Board -> Flipper
+
+| Message                                        | When                                  |
+|------------------------------------------------|---------------------------------------|
+| `READY,<version>`                              | Once after boot.                      |
+| `PONG,<version>`                               | Reply to `PING`.                      |
+| `OK,<command>`                                 | Command accepted.                     |
+| `ERR,<reason>`                                 | Command rejected.                     |
+| `H,<ch>,<frames>,<last>,<avg>,<max>,<locked>`  | Hunt sample, every 100 ms. RSSI values in dBm, `0` when no frame was heard in the window. `locked` is `1` while parked on a channel, `0` while hopping. |
+| `S,<ch>,<frames>,<bytes>,<max_rssi>`           | Spectrum dwell result for one channel (120 ms dwell). |
+| `U,<unique>`                                   | End of a spectrum sweep: distinct transmitter MACs heard during it. |
+| `DISCOVER_BEGIN,<seconds>,<filter>,<ch>`       | Search started (`ch` 0 = hopping).    |
+| `DP,<elapsed_s>,<count>`                       | Search progress, once per second. `count` only counts entries matching the filter. |
+| `DEV,<mac>,<ch>,<rssi>,<frames>,<flags>,<ssid>` | One transmitter, strongest first (max 96). `rssi` is the strongest frame heard. `flags`: `A` access point (sent beacons) or `S` station, plus `R` if the MAC is locally administered (randomized). `ssid` (rest of line) is only set for access points. For APs, `ch` comes from the beacon's DS parameter set. |
+| `DISCOVER_END,<sent>,<total>`                  | Search finished. `total` (matching entries) can exceed `sent`. The board tracks up to 192 transmitters. |
+
+A transmitter counts as an access point if it sends beacons or probe responses,
+management frames where it is the BSSID (addr2 == addr3), or data frames coming
+from the distribution system (FromDS=1, ToDS=0). The last two catch an AP
+whose beacon was missed. With the `AP` filter, other frames are not even
+recorded, so stations cannot fill up the table.
+
+Hunting works for any transmitter MAC, not just access points: the board
+matches the frame's transmitter address (addr2) of management and data frames.
+With `ch=0`, or after 8 s of silence (unless `PIN`), it hops channels (300 ms
+dwell) until it hears the target again.
+
+SSIDs are sanitized: control characters become `?`, so every message stays on one line.

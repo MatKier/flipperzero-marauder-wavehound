@@ -1,0 +1,13 @@
+App(
+    appid="wavehound",
+    name="Wavehound",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="wavehound_app",
+    requires=["gui"],
+    stack_size=4 * 1024,
+    fap_category="GPIO/ESP",
+    fap_icon="wavehound.png",
+    fap_version="1.0",
+    fap_description="Hunt WiFi access points or any MAC with the WiFi dev board",
+    fap_author="Wavehound",
+)
