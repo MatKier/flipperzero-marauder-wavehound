@@ -5,6 +5,7 @@
 #include <gui/gui.h>
 #include <gui/modules/byte_input.h>
 #include <gui/modules/submenu.h>
+#include <gui/modules/text_input.h>
 #include <gui/modules/widget.h>
 #include <gui/scene_manager.h>
 #include <gui/view_dispatcher.h>
@@ -18,10 +19,13 @@
 #define WH_MAX_RESULTS 96
 #define WH_TICK_MS 250
 #define WH_MAX_CHANNEL 13
+#define WH_MAX_SAVED 64
+#define WH_SAVED_NAME_MAX 24
 
 typedef enum {
     WhViewSubmenu,
     WhViewByteInput,
+    WhViewTextInput,
     WhViewWidget,
     WhViewProgress,
     WhViewHunt,
@@ -34,7 +38,16 @@ typedef enum {
     WhEventChannelPicked,
     WhEventFinishEarly,
     WhEventBoardInfoReady,
+    WhEventSaveTarget,
+    WhEventNameEntered,
 } WhCustomEvent;
+
+/** A hunt target the user saved by name, persisted to the SD card. */
+typedef struct {
+    char name[WH_SAVED_NAME_MAX];
+    char mac[18]; /* "aa:bb:cc:dd:ee:ff" */
+    uint8_t channel; /* 0 = auto / hop */
+} WhSavedMac;
 
 /** Who asked the ChannelSelect scene for a channel. */
 typedef enum {
@@ -67,6 +80,7 @@ typedef struct {
 
     Submenu* submenu;
     ByteInput* byte_input;
+    TextInput* text_input;
     Widget* widget;
     WhProgressView* progress;
     WhHuntView* hunt;
@@ -99,6 +113,19 @@ typedef struct {
     /* Board Info text, filled by the UART worker between INFO_BEGIN/INFO_END
      * (guarded by results_mutex). */
     FuriString* board_info;
+
+    /* Saved MACs (favorites), loaded from the SD card at startup. */
+    WhSavedMac saved[WH_MAX_SAVED];
+    size_t saved_count;
+    uint8_t save_channel;      /* channel captured when saving from the hunt */
+    char name_buf[WH_SAVED_NAME_MAX]; /* TextInput buffer for the saved/edited name */
+
+    /* Editing an existing saved entry (the Edit scene's working copy lives in
+     * name_buf, mac_bytes and edit_channel). */
+    bool editing;             /* name/MAC editors update the working copy in place */
+    size_t edit_index;        /* which saved[] entry is being edited */
+    uint8_t edit_channel;     /* working channel while editing */
+    bool edit_channel_mode;   /* Edit scene is showing its channel chooser */
 } WavehoundApp;
 
 /** Send a line to the board (no-op without a UART). */
