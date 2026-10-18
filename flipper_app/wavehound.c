@@ -117,6 +117,20 @@ static void wh_on_line(char* line, void* context) {
             t->randomized = strchr(flags, 'R') != NULL;
         }
         furi_mutex_release(app->results_mutex);
+    } else if(strcmp(tag, "INFO_BEGIN") == 0) {
+        furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+        furi_string_set(app->board_info, "\e#Board info\n");
+        furi_mutex_release(app->results_mutex);
+    } else if(strcmp(tag, "BI") == 0) {
+        /* BI,<label>,<value...> -- value is the rest of the line (no commas). */
+        const char* label = next_field(&cur);
+        if(label) {
+            furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+            furi_string_cat_printf(app->board_info, "%s: %s\n", label, cur ? cur : "");
+            furi_mutex_release(app->results_mutex);
+        }
+    } else if(strcmp(tag, "INFO_END") == 0) {
+        view_dispatcher_send_custom_event(app->view_dispatcher, WhEventBoardInfoReady);
     } else if(strcmp(tag, "DP") == 0) {
         field_int(&cur); /* elapsed seconds; the progress view keeps its own clock */
         app->progress_found = field_int(&cur);
@@ -150,6 +164,7 @@ static WavehoundApp* wh_app_alloc(void) {
     WavehoundApp* app = malloc(sizeof(WavehoundApp));
     memset(app, 0, sizeof(WavehoundApp));
     app->results_mutex = furi_mutex_alloc(FuriMutexTypeNormal);
+    app->board_info = furi_string_alloc();
     app->listen_seconds = 10;
 
     app->gui = furi_record_open(RECORD_GUI);
@@ -199,6 +214,7 @@ static void wh_app_free(WavehoundApp* app) {
     view_dispatcher_free(app->view_dispatcher);
     furi_record_close(RECORD_GUI);
     furi_mutex_free(app->results_mutex);
+    furi_string_free(app->board_info);
     free(app);
 }
 

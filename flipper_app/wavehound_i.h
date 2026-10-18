@@ -33,6 +33,7 @@ typedef enum {
     WhEventMacEntered,
     WhEventChannelPicked,
     WhEventFinishEarly,
+    WhEventBoardInfoReady,
 } WhCustomEvent;
 
 /** Who asked the ChannelSelect scene for a channel. */
@@ -94,6 +95,10 @@ typedef struct {
 
     WhTarget target; /* what the Hunt scene follows */
     uint8_t mac_bytes[6]; /* ByteInput buffer, keeps the last entered MAC */
+
+    /* Board Info text, filled by the UART worker between INFO_BEGIN/INFO_END
+     * (guarded by results_mutex). */
+    FuriString* board_info;
 } WavehoundApp;
 
 /** Send a line to the board (no-op without a UART). */
