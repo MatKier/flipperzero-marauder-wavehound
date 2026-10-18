@@ -15,10 +15,14 @@ Typical uses:
 - Locate your own lost phone, smart plug or camera by its MAC.
 - See which 2.4 GHz channel is least congested before you configure your router.
 
-Wavehound is **receive-only**. It reads frame headers to measure signal
-strength and never transmits deauth or other attack frames. It isn't built on
-Marauder because it only needs passive RSSI reading, not Marauder's
-attack/injection toolkit, so it runs its own small receive-only firmware instead.
+Wavehound is **receive-only**: it reads frame headers to measure signal strength
+and never transmits. It isn't built on Marauder because the hunt — tracking the
+per-frame RSSI of one specific target in promiscuous mode, with channel parking
+and hopping — has to run on the ESP32 in real time. That loop can't live in the
+Flipper app (the `.fap`), which is only a thin UART client that renders what the
+board reports, so the hunting logic runs in the board's own firmware. Marauder is
+its own board firmware with a fixed command set that doesn't expose this, which
+is why Wavehound ships custom firmware rather than building on it.
 
 ```
 ┌──────────── Flipper Zero ─────────────┐        ┌──── WiFi dev board (ESP32-S2) ─────┐
@@ -41,6 +45,7 @@ attack/injection toolkit, so it runs its own small receive-only firmware instead
 | **Enter MAC** | Type a MAC on the hex keypad (pre-filled with your last target), then pick the channel the same way: **Auto (hop until heard)**, a channel number, or a nearby AP's channel. A chosen channel is pinned: the board stays there even while the target is quiet. Clients always use their AP's channel, so the AP option is the quick way to hunt a known client. |
 | **Hunt screen** | The board parks on the target's channel and reports the signal strength of every frame that MAC sends (beacons, data, probes) every 100 ms. The screen shows a big dBm readout, a COLD/COOL/WARM/HOT! label, a meter with peak marker and a 12-second signal graph. Geiger clicks play through the speaker, faster as the signal gets stronger. `?ch` in the corner means the board is still searching channels. After 8 s of silence it hops again to re-find the target. |
 | **Channel spectrum** | The board sweeps channels 1–13 (120 ms dwell each) in promiscuous mode. The Flipper draws one bar per channel with peak hold, a sweep cursor, the busiest channel, and the number of distinct transmitters heard per sweep. You can switch the metric between packets, max dBm and bytes. |
+| **Board info** | Ask the board about itself: firmware build (date + ELF hash), the ESP-IDF version actually running, chip model/revision/cores, radio features, factory MAC, flash size, free/min heap, uptime, chip temperature and the last reset reason (handy for spotting brownouts from the 5 V boost). |
 
 Controls:
 
@@ -55,13 +60,15 @@ Controls:
 firmware/     ESP-IDF project for the ESP32-S2 on the WiFi dev board
   main/main.c     command parser
   main/radio.c    discover / hunt / spectrum state machine + promiscuous callback
+  main/info.c     board version / identity / health report (INFO)
   main/proto.c    UART line I/O
   main/led.c      RGB LED (LEDC PWM)
 flipper_app/  Flipper external app (uFBT)
   wavehound.c             entry, board power/expansion handling, board line parser
   wh_uart.c               USART worker, line splitting, keep-alive ping
   scenes/                 one file per screen (start, listen time, searching,
-                          target list, MAC input, hunt, spectrum, about)
+                          target list, MAC input, hunt, spectrum, board info,
+                          about)
   views/wh_hunt_view.c    hunt screen + Geiger click thread
   views/wh_progress_view.c search progress screen
   views/wh_spectrum_view.c spectrum screen
