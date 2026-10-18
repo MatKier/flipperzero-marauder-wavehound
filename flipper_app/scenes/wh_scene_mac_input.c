@@ -17,6 +17,12 @@ bool wh_scene_mac_input_on_event(void* context, SceneManagerEvent event) {
     WavehoundApp* app = context;
     if(event.type != SceneManagerEventTypeCustom || event.event != WhEventMacEntered) return false;
 
+    if(app->editing) {
+        /* Editing a saved entry: mac_bytes is updated; return to the editor. */
+        scene_manager_previous_scene(app->scene_manager);
+        return true;
+    }
+
     const uint8_t* b = app->mac_bytes;
     memset(&app->target, 0, sizeof(WhTarget));
     snprintf(
