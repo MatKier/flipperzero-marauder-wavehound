@@ -21,15 +21,15 @@ Marauder because it only needs passive RSSI reading, not Marauder's
 attack/injection toolkit, so it runs its own small receive-only firmware instead.
 
 ```
- ┌──────────── Flipper Zero ────────────┐        ┌──── WiFi dev board (ESP32-S2) ────┐
- │  Wavehound.fap                        │  UART  │  Wavehound firmware                │
- │   ├ Targets: AP search, device search,│ 115200 │   ├ timed listen, AP/STA filter    │
- │   │  manual MAC entry                 │◄──────►│   │  → target list                 │
- │   ├ Hunt view: dBm, meter, graph,     │ pins   │   ├ promiscuous RX → RSSI of target│
- │   │  Geiger clicks (speaker)          │ 13/14  │   ├ channel sweep → activity       │
- │   ├ Spectrum view: ch 1-13 bars       │        │   └ RGB LED heat indicator         │
- │   └ 5V OTG on, expansion svc off      │        │                                    │
- └───────────────────────────────────────┘        └────────────────────────────────────┘
+┌──────────── Flipper Zero ─────────────┐        ┌──── WiFi dev board (ESP32-S2) ─────┐
+│  Wavehound.fap                        │  UART  │  Wavehound firmware                │
+│   ├ Targets: AP search, device search,│ 115200 │   ├ timed listen, AP/STA filter    │
+│   │  manual MAC entry                 │◄──────►│   │  → target list                 │
+│   ├ Hunt view: dBm, meter, graph,     │  pins  │   ├ promiscuous RX → RSSI of target│
+│   │  Geiger clicks (speaker)          │ 13/14  │   ├ channel sweep → activity       │
+│   ├ Spectrum view: ch 1-13 bars       │        │   └ RGB LED heat indicator         │
+│   └ 5V OTG on, expansion svc off      │        │                                    │
+└───────────────────────────────────────┘        └────────────────────────────────────┘
 ```
 
 ## Features
@@ -152,9 +152,12 @@ any serial terminal. See [docs/PROTOCOL.md](docs/PROTOCOL.md). Example:
 ## Disclaimer
 
 This is a hobby project, provided as-is and without any warranty. Flashing the
-dev board and running this firmware is at your own risk; we don't guarantee it
+dev board and running this firmware is at your own risk; I don't guarantee it
 won't damage, brick or otherwise break your hardware. You are responsible for
 anything that happens to your Flipper, dev board or other equipment.
+
+This code is AI-assisted: much of it was written with the help of AI tools.
+Review it yourself before trusting it or flashing it to your hardware.
 
 Only locate networks and devices you own or are explicitly authorized to locate,
 and only on your own network. Wavehound is receive-only, and passive reception is

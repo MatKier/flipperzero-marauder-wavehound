@@ -6,4 +6,4 @@ firmware/sdkconfig.*
 firmware/managed_components/
 firmware/dependencies.lock
 flipper_app/dist/
-flipper_app/.vscode/
+.vscode/
