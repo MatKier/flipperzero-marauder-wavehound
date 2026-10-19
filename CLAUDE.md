@@ -87,8 +87,7 @@ and app code, and the PROTOCOL.md doc. Update the doc in the same change.
 
 ## Versioning (agents may bump)
 
-An agent may, **when it judges the change justifies it**, increase the version
-and set a corresponding tag:
+An agent may, **when it judges the change justifies it**, increase the version:
 
 - **App:** `fap_version` in [flipper_app/application.fam](flipper_app/application.fam).
 - **Board firmware:** `WH_FW_VERSION` in [firmware/main/proto.h](firmware/main/proto.h)
@@ -97,6 +96,22 @@ and set a corresponding tag:
 Bump whichever side actually changed (app, firmware, or both). Use judgment:
 a user-visible or protocol-affecting change warrants a bump; a pure refactor or
 doc tweak usually does not.
+
+### Tagging a release
+
+Releases carry a **single git tag `v<fap_version>`** (e.g. `v1.3`) — there is
+**no separate firmware tag**; a `WH_FW_VERSION` bump just rides along in the
+release that happens to include it. One tag per app version; don't tag
+intermediate commits.
+
+Work normally lands on `main` as a **squash-merged PR**, so the release commit's
+SHA only exists once the PR is merged. The flow after a merge is:
+
+1. Set the catalog `commit_sha` (see below) and commit that to `main`.
+2. Tag the **squash-merge commit** (the one carrying the new `fap_version`, e.g.
+   `a2a3f32` for `v1.3`) as `v<fap_version>` and push the tag. The existing
+   `v1.0`/`v1.1`/`v1.2` tags all point at their PR's squash-merge commit — not
+   at the follow-up `commit_sha` commit — so match that.
 
 ## Catalog metadata
 
@@ -114,7 +129,15 @@ and `screenshots/`.
   If one of those changes in the `.fam`, there's nothing to change in the
   manifest, but do check they still agree.
 - The manifest's `changelog` and `screenshots` paths must point at files that
-  exist, and `commit_sha` must be set to the submitted commit before a PR.
+  exist.
+- `commit_sha` must point at the commit on `main` that actually carries the
+  submitted code — i.e. the **squash-merge commit** of the release PR (the same
+  commit the `v<version>` tag is on). That SHA doesn't exist until the PR merges,
+  so the normal flow is: merge the PR, then make a small follow-up commit on
+  `main` that sets `commit_sha` to the merge commit (message like
+  `catalog: set manifest commit_sha to the merged commit`). That follow-up commit
+  is **not** itself the referenced/tagged commit. See `v1.2` → `046038f` and
+  `v1.3` → `a2a3f32` for the pattern.
 
 Path gotcha: the catalog bundler resolves the manifest's `@file` and screenshot
 paths relative to `sourcecode.subdir` (`flipper_app`), **not** to the manifest's
