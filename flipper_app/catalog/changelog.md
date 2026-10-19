@@ -1,3 +1,12 @@
+## v1.7
+
+- New Settings options for hunting. "Haptic" buzzes the Flipper's motor as a
+  proximity cue, pulsing faster as the signal strengthens (works even with sound
+  muted). "Keep backlight" holds the backlight on while a hunt is on screen, so
+  it doesn't dim out mid-sweep. "Range" (Near / Normal / Far) shifts the dBm
+  window the meter spans, so the readout and click/haptic rate stay useful
+  whether you're right on top of a strong transmitter or chasing a faint one.
+
 ## v1.6
 
 - The dev board's LED now turns off when you leave the app, instead of staying
