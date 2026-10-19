@@ -12,7 +12,6 @@
 
 #include "scenes/wh_scene.h"
 #include "views/wh_hunt_view.h"
-#include "views/wh_progress_view.h"
 #include "views/wh_spectrum_view.h"
 #include "wh_uart.h"
 
@@ -27,16 +26,13 @@ typedef enum {
     WhViewByteInput,
     WhViewTextInput,
     WhViewWidget,
-    WhViewProgress,
     WhViewHunt,
     WhViewSpectrum,
 } WhViewId;
 
 typedef enum {
-    WhEventResultsReady = 100,
-    WhEventMacEntered,
+    WhEventMacEntered = 100,
     WhEventChannelPicked,
-    WhEventFinishEarly,
     WhEventBoardInfoReady,
     WhEventSaveTarget,
     WhEventNameEntered,
@@ -57,7 +53,7 @@ typedef enum {
     WhChannelForMacHunt,
 } WhChannelPurpose;
 
-/** What the Searching scene listens for (all are timed passive listens). */
+/** What the live scan (TargetList) listens for. */
 typedef enum {
     WhSearchAccessPoints, /* access points only */
     WhSearchDevices,      /* every transmitter that is not an access point */
@@ -85,7 +81,6 @@ typedef struct {
     ByteInput* byte_input;
     TextInput* text_input;
     Widget* widget;
-    WhProgressView* progress;
     WhHuntView* hunt;
     WhSpectrumView* spectrum;
 
@@ -94,15 +89,12 @@ typedef struct {
     bool otg_enabled_by_us;
     bool board_alive;
 
-    /* Search results. Written by the UART worker between *_BEGIN and *_END. */
+    /* Live scan results, written by the UART worker as DEV lines stream in. */
     FuriMutex* results_mutex;
     WhTarget results[WH_MAX_RESULTS];
     size_t result_count;
-    uint16_t result_total; /* devices heard, may exceed result_count */
-    volatile uint16_t progress_found;
 
     WhSearchKind search_kind;
-    uint16_t listen_seconds;
 
     /* Channel selection for device search / MAC hunt. */
     WhChannelPurpose channel_purpose;
