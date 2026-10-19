@@ -95,6 +95,10 @@ its OUI (the first 3 bytes). Vendor names come from `oui.db`, a sorted
 fixed-width binary (3-byte OUI + name) the app binary-searches by seeking, so
 it stays fast and never loads into RAM.
 
+<p align="center">
+  <img src="flipper_app/catalog/screenshots/device_detail.png" alt="Wavehound device details screen showing the resolved vendor" width="400">
+</p>
+
 Build the app with the database bundled in:
 
 ```
