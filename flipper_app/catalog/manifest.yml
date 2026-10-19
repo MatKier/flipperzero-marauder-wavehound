@@ -11,13 +11,14 @@
 #
 # To submit: copy this file to the catalog repo at
 # applications/GPIO/wavehound/manifest.yml and open a PR (see README / the repo).
-# Set commit_sha below to the commit that contains the submitted code first.
+# commit_sha is the commit on main that contains the submitted code; bump it
+# for each new submission (a new version needs a new commit).
 
 sourcecode:
   type: git
   location:
     origin: https://github.com/MatKier/flipperzero-wavehound.git
-    commit_sha: TODO_SET_TO_SUBMITTED_COMMIT_SHA
+    commit_sha: 6444fedb94bcd68f555425fb934b456dc7988056
     subdir: flipper_app
 
 # Unmodified qFlipper screenshots. The first entry is used as the catalog
