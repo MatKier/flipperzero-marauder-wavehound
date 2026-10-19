@@ -18,7 +18,7 @@ sourcecode:
   type: git
   location:
     origin: https://github.com/MatKier/flipperzero-wavehound.git
-    commit_sha: 8a53ac5cb5fc6b05f03fc069925e06e7fbd6c2af
+    commit_sha: 8d0434ce3045e244750453f1e00681481d75f5f3
     subdir: flipper_app
 
 # Unmodified qFlipper screenshots. The first entry is used as the catalog
