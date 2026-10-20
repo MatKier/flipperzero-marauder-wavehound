@@ -114,6 +114,9 @@ SHA only exists once the PR is merged. The flow after a merge is:
    `v1.0`/`v1.1`/`v1.2` tags all point at their PR's squash-merge commit — not
    at the follow-up `commit_sha` commit — so match that.
 
+If the version bump lands as a direct commit on `main` rather than via a PR
+(as `v1.10` → `b11bf11`), tag that bump commit and point `commit_sha` at it.
+
 ## Catalog metadata
 
 The [Flipper Apps Catalog](https://github.com/flipperdevices/flipper-application-catalog)
