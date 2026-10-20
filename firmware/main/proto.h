@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#define WH_FW_VERSION "6"
+#define WH_FW_VERSION "7"
 
 /** Configure the UART link to the Flipper. */
 void proto_init(void);

@@ -1,3 +1,12 @@
+## v1.10
+
+- The device details screen (shown when you pick a scanned result) now reports
+  an access point's security — Open, WEP, WPA, WPA2 or WPA3 — and its 802.11
+  mode (e.g. g, n, ax), shown inline on the channel line as
+  "AP ch6 WPA2 n -52dBm". The board classifies these from the beacon's RSN/WPA
+  information elements (WPA3 from SAE/OWE/Suite-B AKM suites) and its HT/HE
+  elements. Requires board firmware v7.
+
 ## v1.9
 
 - The hunt screen now shows the channel noise floor: a marker tick above the
