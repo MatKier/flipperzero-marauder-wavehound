@@ -24,7 +24,12 @@ typedef struct {
     bool locked;
     bool heard; /* heard the target within LOST_AFTER_MS */
     float rssi; /* smoothed, 0 = nothing yet */
+    float rssi_slow; /* slower EMA; fast-vs-slow gives the trend */
+    int8_t trend; /* -1 falling, 0 steady, +1 rising */
+    float fps; /* smoothed frames/second from the target */
     int8_t peak;
+    int8_t nf; /* mean noise floor (dBm), 0 = unknown */
+    uint16_t quiet_s; /* seconds since last heard, while lost (0 = heard/never) */
     uint32_t frames_total;
     int8_t history[HISTORY_LEN];
     uint8_t history_pos;
@@ -94,15 +99,38 @@ static void wh_hunt_draw(Canvas* canvas, void* model) {
         int digits_w = canvas_string_width(canvas, buf);
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(canvas, 9 + digits_w + 3, 30, "dBm");
+        /* Frame rate from the target: chatty AP vs. near-idle station. */
+        if(m->fps >= 0.5f) {
+            int dbm_w = canvas_string_width(canvas, "dBm");
+            snprintf(buf, sizeof(buf), "%d/s", (int)(m->fps + 0.5f));
+            canvas_draw_str(canvas, 9 + digits_w + 3 + dbm_w + 5, 30, buf);
+        }
     } else {
         canvas_draw_box(canvas, 1, 22, 6, 3);
         canvas_draw_box(canvas, 9, 22, 10, 3);
         canvas_draw_box(canvas, 22, 22, 10, 3);
+        /* How long the target has been silent, once it has been heard. */
+        if(m->quiet_s) {
+            canvas_set_font(canvas, FontSecondary);
+            snprintf(buf, sizeof(buf), "quiet %us", m->quiet_s);
+            canvas_draw_str(canvas, 40, 30, buf);
+        }
     }
 
     /* Heat word + peak */
     canvas_set_font(canvas, FontPrimary);
     canvas_draw_str_aligned(canvas, 127, 14, AlignRight, AlignTop, heat_word(m));
+    /* Trend chevron left of the heat word: are we getting warmer or colder? */
+    if(m->heard && m->trend != 0) {
+        int ax = 127 - canvas_string_width(canvas, heat_word(m)) - 5;
+        if(m->trend > 0) {
+            canvas_draw_line(canvas, ax, 16, ax - 3, 20);
+            canvas_draw_line(canvas, ax, 16, ax + 3, 20);
+        } else {
+            canvas_draw_line(canvas, ax, 20, ax - 3, 16);
+            canvas_draw_line(canvas, ax, 20, ax + 3, 16);
+        }
+    }
     canvas_set_font(canvas, FontSecondary);
     if(m->peak) {
         snprintf(buf, sizeof(buf), "pk %d", m->peak);
@@ -117,6 +145,13 @@ static void wh_hunt_draw(Canvas* canvas, void* model) {
         int px = 2 + (int)(rssi_fraction(m->peak, m->rssi_floor, m->rssi_ceil) * 123);
         canvas_draw_line(canvas, px, 33, px, 42);
     }
+    /* Noise floor marker: a short tick above the meter. The gap to the signal
+     * fill is the headroom. Distinct from the full-height peak tick. */
+    if(m->nf) {
+        int nx = 2 + (int)(rssi_fraction(m->nf, m->rssi_floor, m->rssi_ceil) * 123);
+        canvas_draw_line(canvas, nx, 31, nx, 33); /* pokes above the meter */
+        canvas_draw_line(canvas, nx, 42, nx, 43); /* and slightly below, like pk */
+    }
 
     /* History graph, newest sample on the right */
     const int graph_h = GRAPH_BOTTOM - GRAPH_TOP;
@@ -128,12 +163,15 @@ static void wh_hunt_draw(Canvas* canvas, void* model) {
     }
     canvas_draw_dot(canvas, 0, GRAPH_TOP);
 
-    if(!m->sound) {
-        canvas_set_font(canvas, FontKeyboard);
+    /* Noise floor value, over the graph where the MUTE label used to sit. The
+     * white box keeps it legible against the graph bars. */
+    if(m->nf) {
+        snprintf(buf, sizeof(buf), "nf %d", m->nf);
+        canvas_set_font(canvas, FontSecondary);
         canvas_set_color(canvas, ColorWhite);
-        canvas_draw_box(canvas, 0, GRAPH_TOP, 25, 9);
+        canvas_draw_box(canvas, 0, GRAPH_TOP, 40, 9);
         canvas_set_color(canvas, ColorBlack);
-        canvas_draw_str(canvas, 1, GRAPH_TOP + 8, "MUTE");
+        canvas_draw_str(canvas, 1, GRAPH_TOP + 8, buf);
     }
 }
 
@@ -366,7 +404,8 @@ void wh_hunt_view_push_sample(
     int8_t last,
     int8_t avg,
     int8_t max,
-    bool locked) {
+    bool locked,
+    int8_t nf) {
     UNUSED(last);
     uint32_t now = furi_get_tick();
     if(frames) hunt->last_heard_tick = now;
@@ -384,10 +423,32 @@ void wh_hunt_view_push_sample(
             if(frames) {
                 m->frames_total += frames;
                 m->rssi = (m->rssi == 0) ? avg : (m->rssi * 0.6f + avg * 0.4f);
+                m->rssi_slow = (m->rssi_slow == 0) ? avg : (m->rssi_slow * 0.96f + avg * 0.04f);
+                float d = m->rssi - m->rssi_slow;
+                /* Hysteresis so the arrow sticks instead of flickering: commit to a
+                 * direction at +/-2 dB, and only clear it once the signal is
+                 * genuinely flat (< 0.7 dB). The dead-band in between holds the
+                 * last direction. */
+                if(d > 2.0f)
+                    m->trend = 1;
+                else if(d < -2.0f)
+                    m->trend = -1;
+                else if(d > -0.7f && d < 0.7f)
+                    m->trend = 0;
+                m->fps = (m->fps == 0) ? frames * 10.0f : (m->fps * 0.7f + frames * 10.0f * 0.3f);
                 if(m->peak == 0 || max > m->peak) m->peak = max;
-            } else if(!heard) {
+                if(nf) m->nf = nf;
+            } else if(heard) {
+                m->fps *= 0.7f; /* still within the lost window: decay the activity */
+            } else {
                 m->rssi = 0;
+                m->rssi_slow = 0;
+                m->trend = 0;
+                m->fps = 0;
             }
+            m->quiet_s = (hunt->last_heard_tick && !heard) ?
+                             (uint16_t)((now - hunt->last_heard_tick) / furi_ms_to_ticks(1000)) :
+                             0;
             m->history[m->history_pos] = frames ? avg : 0;
             m->history_pos = (m->history_pos + 1) % HISTORY_LEN;
             geiger = heard ? (int8_t)m->rssi : 0;
