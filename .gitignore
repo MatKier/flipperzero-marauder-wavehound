@@ -1,6 +1,5 @@
-flipper_app/dist/
-flipper_app/.ufbt/
-flipper_app/assets/oui.db
+dist/
+.ufbt/
 .vscode/
 __pycache__/
 *.pyc

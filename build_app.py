@@ -3,7 +3,7 @@
 
 Steps:
   1. Generate the OUI vendor database (via tools/gen_oui.py) into
-     flipper_app/assets/oui.db, which application.fam bundles as a file asset
+     assets/oui.db, which application.fam bundles as a file asset
      (fap_file_assets="assets") and the Flipper unpacks to
      /ext/apps_assets/wavehound/oui.db.
   2. Build the .fap with ufbt.
@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-APP_DIR = ROOT / "flipper_app"
+APP_DIR = ROOT  # the app (application.fam) lives at the repo root
 ASSETS_DIR = APP_DIR / "assets"
 DB_PATH = ASSETS_DIR / "oui.db"
 GEN = ROOT / "tools" / "gen_oui.py"

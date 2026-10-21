@@ -5,9 +5,8 @@
 # catalog-specific fields live below.
 #
 # File paths (changelog, screenshots) are resolved relative to the sourcecode
-# subdir (flipper_app), NOT to this file's own location. This manifest and the
-# files it points at live in flipper_app/catalog/, so the paths carry a
-# catalog/ prefix.
+# subdir (the repo root), NOT to this file's own location. This manifest and the
+# files it points at live in catalog/, so the paths carry a catalog/ prefix.
 #
 # To submit: copy this file to the catalog repo at
 # applications/GPIO/wavehound/manifest.yml and open a PR (see README / the repo).
@@ -19,7 +18,7 @@ sourcecode:
   location:
     origin: https://github.com/MatKier/flipperzero-wavehound.git
     commit_sha: 74d275a49aad0ed8c467f0dd7cc90cc81379508a
-    subdir: flipper_app
+    subdir: .
 
 # Unmodified qFlipper screenshots. The first entry is used as the catalog
 # preview; reorder the list to change which shot is the preview.
