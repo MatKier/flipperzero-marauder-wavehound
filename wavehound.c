@@ -55,7 +55,6 @@ static WhTarget* wh_results_slot(WavehoundApp* app, const char* mac) {
     memset(t, 0, sizeof(WhTarget));
     t->mo_index = -1;
     t->ap_index = -1;
-    t->sta_index = -1;
     return t;
 }
 
@@ -98,13 +97,11 @@ static void wh_on_scan_line(WavehoundApp* app, char* line) {
             t->is_ap = false;
             t->randomized = (sta.sta_mac[0] & 0x02) != 0;
             /* A station line carries no channel; inherit the parent AP's, so
-             * the hunt screen shows the real channel instead of "?ch0". */
+             * the hunt screen (and the add+foxhunt) use the real channel. The
+             * AP index feeds the "clients of this AP" filter. */
             uint8_t ap_channel = 0;
             t->ap_index = wh_ap_index_for_mac(app, sta.ap_mac, &ap_channel);
             if(ap_channel) t->channel = ap_channel;
-            /* Marauder prints "<n>: " where n is the post-insert list size, so
-             * this station's index is n-1; we track it by appearance order. */
-            if(t->sta_index < 0) t->sta_index = (int16_t)(app->scan_sta_count++);
         }
         furi_mutex_release(app->results_mutex);
     }

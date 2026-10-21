@@ -40,9 +40,8 @@ void wh_marauder_info_ap(WavehoundApp* app, int16_t ap_index);
  * hunts). `channel` 0 is sent as 1. `ssid` may be NULL/empty. */
 void wh_marauder_add_ap(WavehoundApp* app, const char* mac, uint8_t channel, const char* ssid);
 
-/** `foxhunt -w <ap_index>` / `foxhunt -s <ap_index> <sta_index>`. */
+/** `foxhunt -w <ap_index>`: fox-hunt the list entry at `<ap_index>`. */
 void wh_marauder_foxhunt_ap(WavehoundApp* app, int16_t ap_index);
-void wh_marauder_foxhunt_sta(WavehoundApp* app, int16_t ap_index, int16_t sta_index);
 
 /* ---- parsers (board -> app). All take a mutable line (may be tokenized). ---- */
 

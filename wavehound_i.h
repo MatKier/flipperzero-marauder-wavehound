@@ -82,10 +82,9 @@ typedef struct {
     uint16_t frames;
     bool is_ap;
     bool randomized; /* locally administered MAC */
-    /* Marauder refers to fox-hunt targets by their list index, not MAC. */
-    int16_t mo_index;  /* index in Marauder's AP list (-1 = none/typed MAC) */
-    int16_t ap_index;  /* for a station: its AP's index in Marauder's AP list */
-    int16_t sta_index; /* for a station: its index in Marauder's station list */
+    /* Marauder refers to fox-hunt AP targets by their list index, not MAC. */
+    int16_t mo_index;  /* index in Marauder's AP list (-1 = not an AP in the list) */
+    int16_t ap_index;  /* for a station: its AP's index, used by the clients filter */
 } WhTarget;
 
 typedef struct WavehoundApp {
@@ -111,8 +110,7 @@ typedef struct WavehoundApp {
     /* Marauder protocol state (see wh_marauder.c). */
     WhBoardMode board_mode;      /* how the UART worker reads incoming lines */
     uint16_t scan_ap_count;      /* APs seen this scan = next Marauder AP index */
-    uint16_t scan_sta_count;     /* stations seen this scan = next station index */
-    int16_t pending_ap_index;    /* index from "Added AP [n]" for a typed-MAC hunt */
+    int16_t pending_ap_index;    /* index from "Added AP [n]" for an add+foxhunt */
     uint8_t hunt_channel;        /* channel the hunt is parked on (0 = hopping) */
 
     /* Fox-hunt RSSI accumulator: the worker adds each "RSSI:" sample here, the

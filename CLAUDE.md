@@ -63,10 +63,11 @@ or to a parsed line shape must stay consistent across **all three**:
 
 Key Marauder facts the app depends on (see the doc for detail):
 
-- Fox-hunt targets are addressed by **list index**, not MAC. The app scans with
-  `scanall`, assigns each AP an index in print order, resolves each station's AP
-  by MAC, and hunts with `foxhunt -w <ap>` / `foxhunt -s <ap> <sta>`. A typed or
-  saved MAC is injected with `add -a` first, then hunted by the returned index.
+- `foxhunt` takes a **list index**, not a MAC, and `foxhunt -w <index>` matches
+  the entry's MAC as transmitter/receiver/BSSID. An AP is hunted by the index it
+  got during `scanall` (print order); a station, typed MAC or saved MAC is
+  injected with `add -a` and hunted by the returned index. `foxhunt -s` (station
+  by AP+station index) is deliberately not used — it proved unreliable.
 - `clearlist -a` resets the board's lists (and indices) before a **fresh** scan;
   a resume keeps them so stored indices stay valid.
 - Marauder's `"> "` prompt has no trailing newline and prefixes the next line;
