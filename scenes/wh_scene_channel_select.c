@@ -30,7 +30,7 @@ void wh_scene_channel_select_on_enter(void* context) {
 
     submenu_add_item(
         submenu,
-        device_search ? "All channels (hop)" : "Auto (hop until heard)",
+        device_search ? "All channels (hop)" : "Auto (no fixed channel)",
         ITEM_ALL_CHANNELS,
         wh_scene_channel_select_callback,
         app);
