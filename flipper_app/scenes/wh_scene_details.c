@@ -38,7 +38,8 @@ static void wh_scene_details_render(WavehoundApp* app) {
     size_t n = snprintf(line, sizeof(line), "%s", t->is_ap ? "AP" : "Station");
     if(t->channel) n += snprintf(line + n, sizeof(line) - n, " ch%u", t->channel);
     if(t->security[0]) n += snprintf(line + n, sizeof(line) - n, " %s", t->security);
-    snprintf(line + n, sizeof(line) - n, " %ddBm", t->rssi);
+    /* Marauder's station scan carries no RSSI (0 = unknown); only APs have one. */
+    if(t->rssi) snprintf(line + n, sizeof(line) - n, " %ddBm", t->rssi);
     widget_add_string_element(w, 0, 47, AlignLeft, AlignBottom, FontSecondary, line);
 
     widget_add_button_element(w, GuiButtonTypeLeft, "Save", wh_scene_details_button_cb, app);
