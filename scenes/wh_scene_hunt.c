@@ -11,9 +11,6 @@ static FuriTimer* s_feed_timer;
  * once the board echoes "Added AP [n]" (app->pending_ap_index) we start the
  * hunt by that index. */
 static bool s_awaiting_add;
-/* Counts 100 ms feed ticks so we can poll the board's channel about once a
- * second (fox hunt streams no channel, but a bare `channel` query reports it). */
-static uint8_t s_poll_ticks;
 
 static void wh_scene_hunt_feed_cb(void* context) {
     WavehoundApp* app = context;
@@ -22,19 +19,15 @@ static void wh_scene_hunt_feed_cb(void* context) {
         s_awaiting_add = false;
         wh_marauder_foxhunt_ap(app, app->pending_ap_index);
     }
-    if(++s_poll_ticks >= 10) {
-        s_poll_ticks = 0;
-        wh_marauder_poll(app); /* refresh hunt_channel so re-locks show up */
-    }
     wh_hunt_feed_flush(app);
 }
 
-/* Seed the fox hunt's starting channel when we know it (an AP/station from a
- * scan, or a pinned manual channel), so it locks on immediately instead of
- * hopping to find the target. Marauder's fox hunt owns the channel from there:
- * it stays on the target's channel while fresh and hops after ~1.5 s of
- * silence, so a true "pin" (stay put when quiet) is not possible -- this is the
- * best-effort channel behavior. */
+/* Set the hunt's channel. On the screenless dev board Marauder's fox hunt has
+ * no channel logic of its own (it's in the TFT code, compiled out), so it stays
+ * on whatever channel we set here for the whole hunt -- `channel -s` is a hard
+ * park. We seed the known channel of an AP/station (or a manual pick) so the
+ * hunt sits exactly on the target. With channel 0 (auto) there is nothing to
+ * seed and the board can't sweep to find it; see the README caveat. */
 static void wh_scene_hunt_apply_channel(WavehoundApp* app, uint8_t channel) {
     if(channel) {
         wh_marauder_set_channel(app, channel);
@@ -62,7 +55,6 @@ void wh_scene_hunt_on_enter(void* context) {
     furi_mutex_release(app->results_mutex);
 
     s_awaiting_add = false;
-    s_poll_ticks = 0;
     app->board_mode = WhBoardHunting;
 
     const bool is_station = !t->is_ap && t->ap_index >= 0 && t->sta_index >= 0;
