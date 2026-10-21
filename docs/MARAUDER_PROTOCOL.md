@@ -8,9 +8,9 @@ lines the board prints back. Both sides ignore lines they do not understand, so
 boot chatter is harmless.
 
 This documents only the commands and replies Wavehound relies on. The command
-builders live in [`flipper_app/wh_marauder.c`](../flipper_app/wh_marauder.c) and
-the line parsers in the same file; the UART worker that dispatches lines by mode
-is in [`flipper_app/wavehound.c`](../flipper_app/wavehound.c).
+builders live in [`wh_marauder.c`](../wh_marauder.c) and the line parsers in the
+same file; the UART worker that dispatches lines by mode is in
+[`wavehound.c`](../wavehound.c).
 
 ## Prompt quirk
 
