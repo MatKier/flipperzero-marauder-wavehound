@@ -125,6 +125,7 @@ static void wh_on_line(char* line, void* context) {
 
     case WhBoardHunting: {
         int8_t rssi;
+        uint8_t ch;
         if(wh_marauder_parse_foxhunt(line, &rssi)) {
             furi_mutex_acquire(app->results_mutex, FuriWaitForever);
             app->hunt_frames++;
@@ -132,6 +133,11 @@ static void wh_on_line(char* line, void* context) {
             app->hunt_last = rssi;
             if(app->hunt_frames == 1 || rssi > app->hunt_max) app->hunt_max = rssi;
             furi_mutex_release(app->results_mutex);
+        } else if(wh_marauder_parse_channel(line, &ch)) {
+            /* Reply to the periodic `channel` poll: the board's current channel,
+             * which fox hunt keeps on the target's channel, so it tracks re-locks
+             * and channel changes while hunting. */
+            app->hunt_channel = ch;
         }
         break;
     }

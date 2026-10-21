@@ -74,9 +74,11 @@ static void wh_hunt_draw(Canvas* canvas, void* model) {
     canvas_clear(canvas);
     canvas_set_color(canvas, ColorBlack);
 
-    /* Header: target + channel */
+    /* Header: target + channel. "?" while the target is not currently heard:
+     * the shown channel is the board's live channel, which fox hunt sweeps when
+     * the target is quiet, so it is only the locked channel when we hear it. */
     canvas_set_font(canvas, FontSecondary);
-    if(m->locked) {
+    if(m->heard) {
         snprintf(buf, sizeof(buf), "ch%u", m->channel);
     } else {
         snprintf(buf, sizeof(buf), "?ch%u", m->channel);

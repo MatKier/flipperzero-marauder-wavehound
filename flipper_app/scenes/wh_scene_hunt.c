@@ -11,6 +11,9 @@ static FuriTimer* s_feed_timer;
  * once the board echoes "Added AP [n]" (app->pending_ap_index) we start the
  * hunt by that index. */
 static bool s_awaiting_add;
+/* Counts 100 ms feed ticks so we can poll the board's channel about once a
+ * second (fox hunt streams no channel, but a bare `channel` query reports it). */
+static uint8_t s_poll_ticks;
 
 static void wh_scene_hunt_feed_cb(void* context) {
     WavehoundApp* app = context;
@@ -18,6 +21,10 @@ static void wh_scene_hunt_feed_cb(void* context) {
     if(s_awaiting_add && app->pending_ap_index >= 0) {
         s_awaiting_add = false;
         wh_marauder_foxhunt_ap(app, app->pending_ap_index);
+    }
+    if(++s_poll_ticks >= 10) {
+        s_poll_ticks = 0;
+        wh_marauder_poll(app); /* refresh hunt_channel so re-locks show up */
     }
     wh_hunt_feed_flush(app);
 }
@@ -55,6 +62,7 @@ void wh_scene_hunt_on_enter(void* context) {
     furi_mutex_release(app->results_mutex);
 
     s_awaiting_add = false;
+    s_poll_ticks = 0;
     app->board_mode = WhBoardHunting;
 
     const bool is_station = !t->is_ap && t->ap_index >= 0 && t->sta_index >= 0;

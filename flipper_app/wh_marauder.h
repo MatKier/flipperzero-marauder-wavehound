@@ -20,6 +20,10 @@ typedef struct WavehoundApp WavehoundApp;
 /** Stop whatever the board is doing (scan / hunt) and return to idle. */
 void wh_marauder_stop(WavehoundApp* app);
 
+/** Bare `channel`: ask the board to print its current channel. During a hunt
+ * that value tracks the target's channel, so polling it keeps the readout live. */
+void wh_marauder_poll(WavehoundApp* app);
+
 /** `channel -s <ch>`: seed the radio onto one channel (1..14). */
 void wh_marauder_set_channel(WavehoundApp* app, uint8_t channel);
 
@@ -72,6 +76,10 @@ bool wh_marauder_parse_foxhunt(const char* line, int8_t* rssi);
 
 /** `Added AP [<index>][CH:..]..` -> true, writing *index. */
 bool wh_marauder_parse_added_ap(const char* line, int16_t* index);
+
+/** A bare-integer `channel` reply (e.g. "6") -> true, writing the channel (1..14)
+ * to *ch. Lets a hunt track the board's current channel on re-lock. */
+bool wh_marauder_parse_channel(const char* line, uint8_t* ch);
 
 /** `info -a` "Security: <value>" line -> true, writing a short token into `out`
  * ("Open"/"WEP"/"WPA"/"WPA2"/"WPA3"/"WAPI"). Marauder's richer values (e.g.

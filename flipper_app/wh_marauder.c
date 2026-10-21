@@ -12,6 +12,10 @@ void wh_marauder_stop(WavehoundApp* app) {
     wh_send(app, "stopscan");
 }
 
+void wh_marauder_poll(WavehoundApp* app) {
+    wh_send(app, "channel");
+}
+
 void wh_marauder_set_channel(WavehoundApp* app, uint8_t channel) {
     char cmd[24];
     snprintf(cmd, sizeof(cmd), "channel -s %u", channel);
@@ -139,6 +143,18 @@ bool wh_marauder_parse_foxhunt(const char* line, int8_t* rssi) {
     r += 7;
     if(*r != '-' && (*r < '0' || *r > '9')) return false;
     *rssi = (int8_t)atoi(r);
+    return true;
+}
+
+bool wh_marauder_parse_channel(const char* line, uint8_t* ch) {
+    while(*line == ' ') line++;
+    if(*line < '0' || *line > '9') return false;
+    char* end;
+    long v = strtol(line, &end, 10);
+    while(*end == ' ') end++;
+    if(*end != '\0') return false; /* not a bare number -> not a channel reply */
+    if(v < 1 || v > 14) return false;
+    *ch = (uint8_t)v;
     return true;
 }
 
