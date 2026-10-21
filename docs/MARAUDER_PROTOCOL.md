@@ -32,6 +32,7 @@ leading `"> "` from every received line before parsing.
 | `foxhunt -w <ap_index>` | Fox-hunt the AP at `<ap_index>` in the board's list. Streams RSSI samples. |
 | `foxhunt -s <ap_index> <sta_index>` | Fox-hunt the station `<sta_index>` associated with AP `<ap_index>`. |
 | `info` | Print board identity (firmware, hardware, partition, IDF, MACs). |
+| `info -a <ap_index>` | Print one AP's detail (ESSID/BSSID/channel/RSSI/frames/stations/brand/security). The app sends this from the details screen to recover the AP's security, which `scanall` lines don't carry. |
 
 **Fox-hunt targets are addressed by list index, not by MAC.** Wavehound builds
 the list with `scanall`, assigns each AP an index in the order Marauder first
@@ -49,6 +50,7 @@ targets.
 | `<name> RSSI: <dBm>` | One fox-hunt sample, printed per matching frame. Wavehound accumulates these over 100 ms windows into the hunt meter/graph/geiger. Marauder forces the target's channel while it is fresh and hops after ~1.5 s of silence (so a true channel "pin" is not possible). |
 | `Added AP [<index>]...` / `AP already exists at [<index>]:...` | Reply to `add -a`: the first on a fresh add, the second when that MAC was already in the list. Either way `<index>` is the AP-list slot the app then hunts with `foxhunt -w`. |
 | `<label>: <value>` | Reply lines to `info` (e.g. `Firmware: Marauder`, `Version: v1.19.0`, `Hardware: ...`, `App partition: ...`, `ESP-IDF: ...`, `Station MAC: ...`, `AP MAC: ...`). Shown as-is on the Board info screen; there is no end marker, so the screen renders progressively. |
+| `Security: <value>` | Part of the `info -a` reply. The app parses just this line and maps the value to a short token (`Open`/`WEP`/`WPA`/`WPA2`/`WPA3`/`WAPI`; `WPA2 Enterprise`, `WPA/WPA2 Mixed` etc. collapse to the base token, `Unknown` is left blank) for the AP details line. Marauder reports no 802.11 PHY/mode, so that is not shown. |
 
 ## Dropped Wavehound features
 

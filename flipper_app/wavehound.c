@@ -139,6 +139,18 @@ static void wh_on_line(char* line, void* context) {
         }
         break;
 
+    case WhBoardApInfo: {
+        /* info -a <idx> reply: pull out the one AP's security, drop the rest. */
+        char sec[sizeof(app->target.security)];
+        if(wh_marauder_parse_security(line, sec, sizeof(sec))) {
+            furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+            strlcpy(app->target.security, sec, sizeof(app->target.security));
+            furi_mutex_release(app->results_mutex);
+            view_dispatcher_send_custom_event(app->view_dispatcher, WhEventApInfoReady);
+        }
+        break;
+    }
+
     default:
         break;
     }

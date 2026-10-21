@@ -30,6 +30,12 @@ void wh_marauder_info(WavehoundApp* app) {
     wh_send(app, "info");
 }
 
+void wh_marauder_info_ap(WavehoundApp* app, int16_t ap_index) {
+    char cmd[24];
+    snprintf(cmd, sizeof(cmd), "info -a %d", ap_index);
+    wh_send(app, cmd);
+}
+
 void wh_marauder_add_ap(WavehoundApp* app, const char* mac, uint8_t channel, const char* ssid) {
     char cmd[80];
     /* Marauder needs a channel; 0 (auto) is added on ch 1 and hunted with hop. */
@@ -133,6 +139,31 @@ bool wh_marauder_parse_foxhunt(const char* line, int8_t* rssi) {
     r += 7;
     if(*r != '-' && (*r < '0' || *r > '9')) return false;
     *rssi = (int8_t)atoi(r);
+    return true;
+}
+
+bool wh_marauder_parse_security(const char* line, char* out, size_t out_size) {
+    const char* p = strstr(line, "Security: ");
+    if(!p) return false;
+    p += 10; /* past "Security: " */
+    /* Map Marauder's values to the short token the details screen shows. Order
+     * matters: longer/more specific prefixes first ("WPA3"/"WPA2"/"WPA/WPA2"
+     * before plain "WPA"). "Unknown" and anything else leave the field empty. */
+    const char* tok = NULL;
+    if(strncmp(p, "Open", 4) == 0)
+        tok = "Open";
+    else if(strncmp(p, "WEP", 3) == 0)
+        tok = "WEP";
+    else if(strncmp(p, "WPA3", 4) == 0)
+        tok = "WPA3";
+    else if(strncmp(p, "WPA2", 4) == 0 || strncmp(p, "WPA/WPA2", 8) == 0)
+        tok = "WPA2";
+    else if(strncmp(p, "WPA", 3) == 0)
+        tok = "WPA";
+    else if(strncmp(p, "WAPI", 4) == 0)
+        tok = "WAPI";
+    if(!tok) return false;
+    strlcpy(out, tok, out_size);
     return true;
 }
 

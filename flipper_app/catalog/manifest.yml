@@ -56,7 +56,8 @@ description: |
     point, or just the clients of a nearby AP.
   - **Enter MAC** - hunt any MAC directly, auto-hopping or starting on a chosen
     channel.
-  - **Device details** - MAC vendor (OUI) lookup, type, channel and signal.
+  - **Device details** - MAC vendor (OUI) lookup, type, channel, signal, and an
+    access point's security.
   - **Saved MACs** - keep favorites on the SD card and relaunch them.
   - **Board info** - Marauder firmware and board identity readout.
   - **Settings** - click volume, default sound, saved-hunt channel, meter
