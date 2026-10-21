@@ -55,7 +55,8 @@ under `results_mutex`.
 The app talks to Marauder over a plain-text, line-based CLI. The command
 builders and the reply-line parsers both live in `wh_marauder.c`; the UART
 worker in `wavehound.c` dispatches each received line by `app->board_mode`
-(`WhBoardScanning`/`Hunting`/`Info`). The exact subset — every command sent and
+(`WhBoardScanArming`/`Scanning`/`Hunting`/`Info`/`ApInfo`), after feeding any
+pending `add -a` handshake. The exact subset — every command sent and
 every reply line shape parsed — is documented in
 [docs/MARAUDER_PROTOCOL.md](docs/MARAUDER_PROTOCOL.md). Any change to a command
 or to a parsed line shape must stay consistent across **all three**:
@@ -64,12 +65,19 @@ or to a parsed line shape must stay consistent across **all three**:
 Key Marauder facts the app depends on (see the doc for detail):
 
 - `foxhunt` takes a **list index**, not a MAC, and `foxhunt -w <index>` matches
-  the entry's MAC as transmitter/receiver/BSSID. An AP is hunted by the index it
-  got during `scanall` (print order); a station, typed MAC or saved MAC is
-  injected with `add -a` and hunted by the returned index. `foxhunt -s` (station
-  by AP+station index) is deliberately not used — it proved unreliable.
-- `clearlist -a` resets the board's lists (and indices) before a **fresh** scan;
-  a resume keeps them so stored indices stay valid.
+  the entry's MAC as transmitter/receiver/BSSID. `foxhunt -s` (station by
+  AP+station index) is deliberately not used — it proved unreliable.
+- **Never cache a Marauder index.** Every `scanall` rebuilds the board's AP list,
+  and an AP can be printed without being added, so print order is not list
+  order. Every index comes from an `add -a -b <mac>` handshake
+  (`wh_add_begin`): Marauder dedups by MAC and answers `Added AP [n]` or
+  `AP already exists at [n]`. That covers scanned APs, stations, typed and saved
+  MACs alike. Rows in the app are keyed by MAC (stations by their AP's MAC).
+- Marauder echoes every command as `#<command>`. The app uses the echo to scope
+  replies (`#add …` before its reply, `#scanall` before a new scan's lines), and
+  `Starting…Fox Hunt. Stop with stopscan` as the only proof a hunt started.
+- Starting a hunt tunes to the list entry's channel, so `channel -s` is sent
+  **after** the start ack.
 - Marauder's `"> "` prompt has no trailing newline and prefixes the next line;
   `wh_on_line` strips a leading `"> "` before parsing.
 

@@ -5,43 +5,129 @@
  * rate. A 100 ms timer drains the accumulator (filled by the UART worker) into
  * the hunt view as one sample, so the meter/graph/geiger keep their cadence. */
 #define WH_FEED_PERIOD_MS 100
+/* Each handshake step waits this many timer ticks for the board, then retries. */
+#define WH_HUNT_STEP_TICKS 15
+#define WH_HUNT_TRIES 3
 
-static FuriTimer* s_feed_timer;
-/* A typed/saved MAC is not in Marauder's list, so it is added with `add -a`;
- * once the board echoes "Added AP [n]" (app->pending_ap_index) we start the
- * hunt by that index. */
-static bool s_awaiting_add;
+/* Starting a hunt is a small handshake driven from the feed timer, because the
+ * board's CLI has no other acknowledgements:
+ *  1. `add -a` the target's MAC. Marauder dedups by MAC, so this returns the
+ *     entry's current list index whether it is a scanned AP, a station or a
+ *     typed/saved MAC. (Indices are never cached: every scanall rebuilds the
+ *     board's AP list.)
+ *  2. `foxhunt -w <index>` until the board prints "Starting...Fox Hunt", the
+ *     only sign it actually started (it is silently ignored if the board is
+ *     still scanning or the index is out of range).
+ *  3. Park the radio: starting the hunt tunes to the list entry's channel, so
+ *     the user's channel is applied after it. The board's reply to that (or to
+ *     a bare `channel` for Auto) is the channel the hunt header shows. */
+typedef enum {
+    WhHuntStepAdd,
+    WhHuntStepStart,
+    WhHuntStepRunning,
+    WhHuntStepFailed,
+} WhHuntStep;
+
+static WhHuntStep s_step;
+static uint8_t s_tries;
+static uint16_t s_wait;
+static int16_t s_index;
+static const char* s_fail;
+
+static void wh_scene_hunt_fail(const char* why) {
+    s_step = WhHuntStepFailed;
+    s_fail = why;
+}
+
+static void wh_scene_hunt_send_start(WavehoundApp* app) {
+    app->hunt_started = false;
+    wh_marauder_foxhunt_ap(app, s_index);
+}
+
+static void wh_scene_hunt_step(WavehoundApp* app) {
+    const WhTarget* t = &app->target;
+
+    switch(s_step) {
+    case WhHuntStepAdd: {
+        furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+        const WhAddState state = app->add_state;
+        const int16_t index = app->add_index;
+        const uint8_t error = app->add_error;
+        furi_mutex_release(app->results_mutex);
+
+        if(state == WhAddDone) {
+            s_index = index;
+            s_step = WhHuntStepStart;
+            s_tries = 0;
+            s_wait = 0;
+            wh_scene_hunt_send_start(app);
+        } else if(state == WhAddFailed) {
+            wh_scene_hunt_fail(error == WhAddErrMemory ? "low board memory" : "MAC rejected");
+        } else if(++s_wait >= WH_HUNT_STEP_TICKS) {
+            /* Re-adding is idempotent (dedup by MAC). */
+            s_wait = 0;
+            if(++s_tries >= WH_HUNT_TRIES) {
+                wh_scene_hunt_fail("no board reply");
+            } else {
+                wh_add_begin(app, t->mac, t->channel);
+            }
+        }
+        break;
+    }
+
+    case WhHuntStepStart:
+        if(app->hunt_started) {
+            s_step = WhHuntStepRunning;
+            if(t->channel) {
+                wh_marauder_set_channel(app, t->channel);
+            } else {
+                /* Auto: stay where the hunt put us, but learn where that is. */
+                wh_marauder_query_channel(app);
+            }
+        } else if(++s_wait >= WH_HUNT_STEP_TICKS) {
+            s_wait = 0;
+            if(++s_tries >= WH_HUNT_TRIES) {
+                wh_scene_hunt_fail("start failed");
+            } else {
+                /* Maybe the board was still busy (a lost stopscan): stop it and
+                 * ask again. Safe, as no hunt is running yet. */
+                wh_marauder_stop(app);
+                wh_scene_hunt_send_start(app);
+            }
+        }
+        break;
+
+    case WhHuntStepRunning:
+    case WhHuntStepFailed:
+    default:
+        break;
+    }
+}
 
 static void wh_scene_hunt_feed_cb(void* context) {
     WavehoundApp* app = context;
 
-    if(s_awaiting_add && app->pending_ap_index >= 0) {
-        s_awaiting_add = false;
-        wh_marauder_foxhunt_ap(app, app->pending_ap_index);
-    }
-    wh_hunt_feed_flush(app);
-}
+    wh_scene_hunt_step(app);
 
-/* Set the hunt's channel. On the screenless dev board Marauder's fox hunt has
- * no channel logic of its own (it's in the TFT code, compiled out), so it stays
- * on whatever channel we set here for the whole hunt -- `channel -s` is a hard
- * park. We seed the known channel of an AP/station (or a manual pick) so the
- * hunt sits exactly on the target. With channel 0 (auto) there is nothing to
- * seed and the board can't sweep to find it; see the README caveat. */
-static void wh_scene_hunt_apply_channel(WavehoundApp* app, uint8_t channel) {
-    if(channel) {
-        wh_marauder_set_channel(app, channel);
-        app->hunt_channel = channel;
-    } else {
-        app->hunt_channel = 0;
+    const char* status = "";
+    if(s_step == WhHuntStepFailed) {
+        status = s_fail;
+    } else if(!app->board_alive) {
+        status = "no board";
+    } else if(s_step != WhHuntStepRunning) {
+        status = "starting...";
     }
+    wh_hunt_view_set_status(app->hunt, status);
+
+    wh_hunt_feed_flush(app);
 }
 
 void wh_scene_hunt_on_enter(void* context) {
     WavehoundApp* app = context;
     const WhTarget* t = &app->target;
 
-    wh_hunt_view_set_target(app->hunt, t->name[0] ? t->name : t->mac, t->channel);
+    /* Channel 0 until the board reports where the hunt is parked. */
+    wh_hunt_view_set_target(app->hunt, t->name[0] ? t->name : t->mac, 0);
 
     if(app->settings.keep_backlight) {
         notification_message(app->notifications, &sequence_display_backlight_enforce_on);
@@ -52,30 +138,25 @@ void wh_scene_hunt_on_enter(void* context) {
     app->hunt_frames = 0;
     app->hunt_sum = 0;
     app->hunt_max = 0;
+    app->hunt_last = 0;
     furi_mutex_release(app->results_mutex);
 
-    s_awaiting_add = false;
-    app->board_mode = WhBoardHunting;
+    app->hunt_started = false;
+    app->hunt_channel = 0;
+    wh_set_board_mode(app, WhBoardHunting);
 
-    wh_scene_hunt_apply_channel(app, t->channel);
-
-    if(t->is_ap && t->mo_index >= 0) {
-        /* An AP is already in Marauder's list: hunt it by its index. */
-        wh_marauder_foxhunt_ap(app, t->mo_index);
+    s_step = WhHuntStepAdd;
+    s_tries = 0;
+    s_wait = 0;
+    s_index = -1;
+    if(app->uart) {
+        wh_add_begin(app, t->mac, t->channel);
     } else {
-        /* Anything else -- a station, a typed MAC, a saved MAC -- is hunted by
-         * adding it to Marauder's list and then `foxhunt -w <index>` (handled in
-         * the feed timer once "Added AP [n]" comes back). `foxhunt -w` matches
-         * the MAC as transmitter/receiver/BSSID, so it tracks a station's frames
-         * just as well, and it avoids `foxhunt -s`, whose station-index/
-         * association validation proved flaky. */
-        app->pending_ap_index = -1;
-        s_awaiting_add = true;
-        wh_marauder_add_ap(app, t->mac, t->channel, t->name);
+        wh_scene_hunt_fail("USART busy");
     }
 
-    s_feed_timer = furi_timer_alloc(wh_scene_hunt_feed_cb, FuriTimerTypePeriodic, app);
-    furi_timer_start(s_feed_timer, furi_ms_to_ticks(WH_FEED_PERIOD_MS));
+    app->hunt_timer = furi_timer_alloc(wh_scene_hunt_feed_cb, FuriTimerTypePeriodic, app);
+    furi_timer_start(app->hunt_timer, furi_ms_to_ticks(WH_FEED_PERIOD_MS));
 
     view_dispatcher_switch_to_view(app->view_dispatcher, WhViewHunt);
 }
@@ -98,13 +179,17 @@ bool wh_scene_hunt_on_event(void* context, SceneManagerEvent event) {
 
 void wh_scene_hunt_on_exit(void* context) {
     WavehoundApp* app = context;
-    if(s_feed_timer) {
-        furi_timer_stop(s_feed_timer);
-        furi_timer_free(s_feed_timer);
-        s_feed_timer = NULL;
+    if(app->hunt_timer) {
+        furi_timer_stop(app->hunt_timer);
+        furi_timer_free(app->hunt_timer);
+        app->hunt_timer = NULL;
     }
     wh_marauder_stop(app);
-    app->board_mode = WhBoardIdle;
+    wh_set_board_mode(app, WhBoardIdle);
+    furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+    app->add_state = WhAddIdle;
+    furi_mutex_release(app->results_mutex);
+    app->hunt_started = false;
     /* Always release the enforce, regardless of the current setting: it is a
      * global display state, so toggling "Keep backlight" off between enter and
      * exit must not leave it stuck on. Harmless if it was never enforced. */

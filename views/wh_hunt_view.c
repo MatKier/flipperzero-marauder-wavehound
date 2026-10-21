@@ -29,6 +29,7 @@ typedef struct {
     float fps; /* smoothed frames/second from the target */
     int8_t peak;
     uint16_t quiet_s; /* seconds since last heard, while lost (0 = heard/never) */
+    char status[24]; /* shown in the readout row while not heard ("" = none) */
     uint32_t frames_total;
     int8_t history[HISTORY_LEN];
     uint8_t history_pos;
@@ -74,11 +75,13 @@ static void wh_hunt_draw(Canvas* canvas, void* model) {
     canvas_clear(canvas);
     canvas_set_color(canvas, ColorBlack);
 
-    /* Header: target + channel. "?" while the target is not currently heard:
-     * the shown channel is the board's live channel, which fox hunt sweeps when
-     * the target is quiet, so it is only the locked channel when we hear it. */
+    /* Header: target + the channel the board reports it is parked on. "?"
+     * while the target is not currently heard (quiet, or not on this channel);
+     * "ch?" until the board has told us its channel. */
     canvas_set_font(canvas, FontSecondary);
-    if(m->heard) {
+    if(!m->channel) {
+        strlcpy(buf, "ch?", sizeof(buf));
+    } else if(m->heard) {
         snprintf(buf, sizeof(buf), "ch%u", m->channel);
     } else {
         snprintf(buf, sizeof(buf), "?ch%u", m->channel);
@@ -110,9 +113,12 @@ static void wh_hunt_draw(Canvas* canvas, void* model) {
         canvas_draw_box(canvas, 1, 22, 6, 3);
         canvas_draw_box(canvas, 9, 22, 10, 3);
         canvas_draw_box(canvas, 22, 22, 10, 3);
-        /* How long the target has been silent, once it has been heard. */
-        if(m->quiet_s) {
-            canvas_set_font(canvas, FontSecondary);
+        /* A status (starting up, failed, no board) wins over the quiet time:
+         * how long the target has been silent, once it has been heard. */
+        canvas_set_font(canvas, FontSecondary);
+        if(m->status[0]) {
+            canvas_draw_str(canvas, 40, 30, m->status);
+        } else if(m->quiet_s) {
             snprintf(buf, sizeof(buf), "quiet %us", m->quiet_s);
             canvas_draw_str(canvas, 40, 30, buf);
         }
@@ -357,6 +363,14 @@ uint8_t wh_hunt_view_current_channel(WhHuntView* hunt) {
     with_view_model(
         hunt->view, WhHuntModel * m, { ch = m->locked ? m->channel : 0; }, false);
     return ch;
+}
+
+void wh_hunt_view_set_status(WhHuntView* hunt, const char* status) {
+    with_view_model(
+        hunt->view,
+        WhHuntModel * m,
+        { strlcpy(m->status, status ? status : "", sizeof(m->status)); },
+        true);
 }
 
 void wh_hunt_view_set_target(WhHuntView* hunt, const char* name, uint8_t channel) {

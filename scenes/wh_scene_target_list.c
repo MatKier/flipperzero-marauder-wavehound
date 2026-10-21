@@ -8,7 +8,9 @@
 
 /* Scene state: FRESH clears the list and starts a new scan on enter; RESUME
  * keeps the results already found (set when drilling into a result's Details,
- * so returning does not throw them away). "Search again" always starts fresh. */
+ * so returning does not throw them away). "Search again" always starts fresh.
+ * Either way the board's own AP list restarts (scanall rebuilds it), which is
+ * fine: rows are keyed by MAC and hunts look the index up by MAC. */
 #define TARGET_LIST_FRESH 0
 #define TARGET_LIST_RESUME 1
 
@@ -19,6 +21,12 @@ static size_t s_rows_shown;  /* rows actually added for the current filter */
 static size_t s_header_count; /* count last written to the header */
 static uint8_t s_spin; /* animated scan indicator phase */
 static uint32_t s_picked_item; /* submenu index of the last picked result */
+static uint16_t s_ticks; /* ticks since the scan was (re)started */
+
+/* Give the "#scanall" echo this long before scanning anyway (echo lost). */
+#define WH_ARM_TIMEOUT_TICKS (1000 / WH_TICK_MS)
+/* Only call the board missing after this long without a line from it. */
+#define WH_NO_BOARD_TICKS (3000 / WH_TICK_MS)
 
 static void wh_scene_target_list_callback(void* context, uint32_t index) {
     WavehoundApp* app = context;
@@ -46,14 +54,16 @@ static const char* wh_scene_target_list_noun(WhSearchKind kind) {
 /* Start a Marauder scanall (finds APs and their stations). Marauder's AP/STA
  * scan always hops every channel regardless of the ChanHop setting, so a
  * device/client channel choice can't restrict the scan itself; it is applied
- * later, at hunt time, to seed the fox hunt's starting channel. On a fresh
- * start we clear Marauder's lists first so indices restart at 0; on a resume we
- * keep them, so the stored AP/station indices still address the hunt. */
+ * later, at hunt time, to park the fox hunt. scanall rebuilds the board's AP
+ * list itself; a fresh start also clears its station list (clearlist) so known
+ * stations are printed again. The worker ignores lines until the "#scanall"
+ * echo, dropping what the previous scan printed before it saw our stopscan. */
 static void wh_scene_target_list_send_discover(WavehoundApp* app, bool fresh) {
+    wh_set_board_mode(app, WhBoardScanArming);
+    s_ticks = 0;
     wh_marauder_stop(app);
     if(fresh) wh_marauder_clear(app);
     wh_marauder_scan(app);
-    app->board_mode = WhBoardScanning;
 }
 
 /* Header text: either the AP-picker prompt, or a live "scanning" count. */
@@ -67,6 +77,8 @@ static void wh_scene_target_list_set_header(WavehoundApp* app, size_t count) {
             sizeof(header));
     } else if(!app->uart) {
         strlcpy(header, "USART busy!", sizeof(header));
+    } else if(!app->board_alive && s_ticks >= WH_NO_BOARD_TICKS) {
+        strlcpy(header, "No board! Check it", sizeof(header));
     } else {
         /* A block bouncing across a bracketed field -- reads as a radar
          * scanning, even at zero found. Every frame holds the same glyphs
@@ -76,9 +88,11 @@ static void wh_scene_target_list_set_header(WavehoundApp* app, size_t count) {
         static const char* const scan_frames[] = {
             "[#   ]", "[ #  ]", "[  # ]", "[   #]", "[  # ]", "[ #  ]"};
         const char* bar = scan_frames[s_spin % (sizeof(scan_frames) / sizeof(scan_frames[0]))];
+        /* A full table drops whatever is heard next: say so. */
         snprintf(
             header, sizeof(header), "Scan %s %u %s", bar, (unsigned)count,
-            wh_scene_target_list_noun(app->search_kind));
+            app->result_count >= WH_MAX_RESULTS ? "(full)" :
+                                                  wh_scene_target_list_noun(app->search_kind));
     }
     submenu_set_header(app->submenu, header);
 }
@@ -90,21 +104,10 @@ static bool wh_scene_target_list_wanted(WavehoundApp* app, const WhTarget* t) {
     switch(app->search_kind) {
     case WhSearchAccessPoints:
         return t->is_ap;
-    case WhSearchClients: {
-        /* The client scan re-indexes Marauder's AP list, so match the chosen AP
-         * by MAC in the current results, not by the index from the picker scan.
-         * Caller holds results_mutex. */
-        if(t->is_ap) return false;
-        int16_t want = -1;
-        for(size_t i = 0; i < app->result_count; i++) {
-            if(app->results[i].is_ap &&
-               strcmp(app->results[i].mac, app->clients_ap.mac) == 0) {
-                want = app->results[i].mo_index;
-                break;
-            }
-        }
-        return want >= 0 && t->ap_index == want;
-    }
+    case WhSearchClients:
+        /* The station line names its AP's MAC, so this holds even before (or
+         * without) the AP's own row. */
+        return !t->is_ap && strcmp(t->ap_mac, app->clients_ap.mac) == 0;
     case WhSearchDevices:
     default:
         return !t->is_ap;
@@ -131,9 +134,10 @@ static size_t wh_scene_target_list_sync_rows(WavehoundApp* app) {
 
 /* Clear the list and (re)start a continuous scan. */
 static void wh_scene_target_list_restart(WavehoundApp* app) {
+    /* Stop storing the old scan's lines before emptying the table. */
+    wh_set_board_mode(app, WhBoardIdle);
     furi_mutex_acquire(app->results_mutex, FuriWaitForever);
     app->result_count = 0;
-    app->scan_ap_count = 0;
     furi_mutex_release(app->results_mutex);
     s_shown = 0;
     s_rows_shown = 0;
@@ -160,8 +164,8 @@ static void wh_scene_target_list_resume(WavehoundApp* app) {
     wh_scene_target_list_set_header(app, count);
     s_header_count = count;
 
-    /* Resume keeps Marauder's AP/station lists intact (no clearlist), so the
-     * stored indices still address the right targets when hunting. */
+    /* No clearlist: the stations Marauder already knows are not printed
+     * again, but their rows are still here. */
     if(app->uart) wh_scene_target_list_send_discover(app, false);
 }
 
@@ -186,6 +190,10 @@ bool wh_scene_target_list_on_event(void* context, SceneManagerEvent event) {
     WavehoundApp* app = context;
 
     if(event.type == SceneManagerEventTypeTick) {
+        if(s_ticks < UINT16_MAX) s_ticks++;
+        if(app->board_mode == WhBoardScanArming && s_ticks >= WH_ARM_TIMEOUT_TICKS) {
+            wh_set_board_mode(app, WhBoardScanning); /* "#scanall" echo lost */
+        }
         /* Append devices heard since the last tick; never rebuild, so the
          * highlight stays where the user left it. */
         const size_t count = wh_scene_target_list_sync_rows(app);
@@ -251,10 +259,10 @@ bool wh_scene_target_list_on_event(void* context, SceneManagerEvent event) {
 void wh_scene_target_list_on_exit(void* context) {
     WavehoundApp* app = context;
     /* Stop the board scanning whenever we leave (pick, back or restart handles
-     * its own resend). Harmless once the board is idle. Marauder's lists are
-     * left intact (no clearlist) so a hunt launched next can still address the
-     * picked target by index. */
+     * its own resend). Harmless once the board is idle. The board keeps its
+     * list after stopscan, so a hunt launched next finds the picked target's
+     * entry by MAC. */
+    wh_set_board_mode(app, WhBoardIdle);
     wh_marauder_stop(app);
-    app->board_mode = WhBoardIdle;
     submenu_reset(app->submenu);
 }

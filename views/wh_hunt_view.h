@@ -31,13 +31,17 @@ void wh_hunt_view_set_range(WhHuntView* hunt, int8_t floor, int8_t ceil);
 /** Channel the hunt is currently locked on, or 0 if still hopping/seeking. */
 uint8_t wh_hunt_view_current_channel(WhHuntView* hunt);
 
+/** Show a short status line (e.g. "starting...", "No board") in the readout
+ * row while the target isn't being heard. NULL or "" clears it. */
+void wh_hunt_view_set_status(WhHuntView* hunt, const char* status);
+
 /** Reset the view for a new target. */
 void wh_hunt_view_set_target(WhHuntView* hunt, const char* name, uint8_t channel);
 
 /** Feed one aggregated hunt sample (a 100 ms window of Marauder RSSI frames).
  * Safe to call from any thread. `frames` is how many frames were heard in the
  * window (0 = silent), `avg`/`max` the dBm over them, `locked` whether the hunt
- * is parked on a channel (vs. hopping). */
+ * is running on a known channel (vs. still starting up). */
 void wh_hunt_view_push_sample(
     WhHuntView* hunt,
     uint8_t channel,

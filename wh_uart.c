@@ -5,10 +5,13 @@
 #include <string.h>
 
 #define WH_UART_BAUD 115200
-#define WH_RX_BUF_SIZE 1024
+/* ~350 ms of 115200 baud: the RX ISR drops bytes when this is full, and the
+ * worker can stall on results_mutex while the UI rebuilds a long list. */
+#define WH_RX_BUF_SIZE 4096
 #define WH_LINE_MAX 160
 #define WH_POLL_INTERVAL_MS 1500
 #define WH_ALIVE_TIMEOUT_MS 4000
+#define WH_WORKER_STACK 3072
 
 typedef enum {
     WorkerEvtStop = (1 << 0),
@@ -94,7 +97,7 @@ WhUart* wh_uart_alloc(WhUartLineCallback callback, void* context) {
     /* Order matters: the worker may transmit as soon as it runs, and the RX
      * callback needs a started thread to signal. */
     furi_hal_serial_init(uart->serial, WH_UART_BAUD);
-    uart->thread = furi_thread_alloc_ex("WhUartWorker", 2048, wh_uart_worker, uart);
+    uart->thread = furi_thread_alloc_ex("WhUartWorker", WH_WORKER_STACK, wh_uart_worker, uart);
     furi_thread_start(uart->thread);
     furi_hal_serial_async_rx_start(uart->serial, wh_uart_rx_cb, uart, false);
     return uart;

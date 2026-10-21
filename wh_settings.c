@@ -15,6 +15,7 @@
 
 #define WH_SETTINGS_DIR APP_DATA_PATH("")
 #define WH_SETTINGS_FILE APP_DATA_PATH("settings.txt")
+#define WH_SETTINGS_TMP APP_DATA_PATH("settings.tmp")
 
 /* One "key=value" per line. Unknown keys are ignored, missing keys keep their
  * default, so the file stays forward/backward compatible. */
@@ -101,17 +102,21 @@ void wh_settings_save(WavehoundApp* app) {
     storage_common_mkdir(storage, WH_SETTINGS_DIR); /* no-op if it already exists */
     Stream* stream = buffered_file_stream_alloc(storage);
 
-    if(buffered_file_stream_open(stream, WH_SETTINGS_FILE, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
+    /* Temp file + rename, so a failed write keeps the previous settings. */
+    bool ok = buffered_file_stream_open(stream, WH_SETTINGS_TMP, FSAM_WRITE, FSOM_CREATE_ALWAYS);
+    if(ok) {
         /* tenths (1..10); parsed back without float conversion */
         stream_write_format(stream, "volume=%u\n", (unsigned)(s->click_volume * 10.0f + 0.5f));
         stream_write_format(stream, "mute=%u\n", s->mute_default ? 1u : 0u);
         stream_write_format(stream, "saved_hunt=%u\n", s->saved_hunt_mode);
         stream_write_format(stream, "haptic=%u\n", s->haptic ? 1u : 0u);
         stream_write_format(stream, "keep_backlight=%u\n", s->keep_backlight ? 1u : 0u);
-        stream_write_format(stream, "range=%u\n", s->range_mode);
+        ok = stream_write_format(stream, "range=%u\n", s->range_mode) > 0;
+        ok = ok && buffered_file_stream_sync(stream);
     }
 
     buffered_file_stream_close(stream);
     stream_free(stream);
+    if(ok) storage_common_rename(storage, WH_SETTINGS_TMP, WH_SETTINGS_FILE);
     furi_record_close(RECORD_STORAGE);
 }

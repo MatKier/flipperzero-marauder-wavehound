@@ -34,12 +34,28 @@ bool wh_scene_name_input_on_event(void* context, SceneManagerEvent event) {
         scene_manager_previous_scene(app->scene_manager);
         return true;
     }
-    wh_store_add(app, app->name_buf, app->target.mac, app->save_channel);
-    scene_manager_previous_scene(app->scene_manager); /* back to the hunt */
+    const WhStoreResult res = wh_store_add(app, app->name_buf, app->target.mac, app->save_channel);
+    if(res == WhStoreOk) {
+        scene_manager_previous_scene(app->scene_manager); /* back to the hunt */
+        return true;
+    }
+    /* Say why nothing was saved; Back returns to where we came from. */
+    widget_reset(app->widget);
+    widget_add_string_multiline_element(
+        app->widget,
+        64,
+        32,
+        AlignCenter,
+        AlignCenter,
+        FontSecondary,
+        res == WhStoreFull ? "Not saved:\nthe saved list is full.\nDelete one first." :
+                             "Not saved:\ncouldn't write to the\nSD card.");
+    view_dispatcher_switch_to_view(app->view_dispatcher, WhViewWidget);
     return true;
 }
 
 void wh_scene_name_input_on_exit(void* context) {
     WavehoundApp* app = context;
     text_input_reset(app->text_input);
+    widget_reset(app->widget);
 }

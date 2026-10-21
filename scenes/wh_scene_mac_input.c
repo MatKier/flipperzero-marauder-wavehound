@@ -24,10 +24,9 @@ bool wh_scene_mac_input_on_event(void* context, SceneManagerEvent event) {
     }
 
     const uint8_t* b = app->mac_bytes;
+    /* The hunt looks a typed MAC up (or adds it) in Marauder's list with
+     * `add -a`. */
     memset(&app->target, 0, sizeof(WhTarget));
-    /* A typed MAC is not in Marauder's list: the hunt adds it with `add -a`. */
-    app->target.mo_index = -1;
-    app->target.ap_index = -1;
     snprintf(
         app->target.mac,
         sizeof(app->target.mac),
