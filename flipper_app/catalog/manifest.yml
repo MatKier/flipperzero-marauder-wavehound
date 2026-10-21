@@ -53,8 +53,9 @@ description: |
   - **Hunt access point** - live scan that fills as networks appear, then hunt
     the chosen AP by RSSI.
   - **Hunt devices** - find stations (phones, laptops, IoT) seen with an access
-    point; scope to all channels, one channel, or the clients of a nearby AP.
-  - **Enter MAC** - hunt any MAC directly, on auto-hop or a pinned channel.
+    point, or just the clients of a nearby AP.
+  - **Enter MAC** - hunt any MAC directly, auto-hopping or starting on a chosen
+    channel.
   - **Device details** - MAC vendor (OUI) lookup, type, channel and signal.
   - **Saved MACs** - keep favorites on the SD card and relaunch them.
   - **Board info** - Marauder firmware and board identity readout.

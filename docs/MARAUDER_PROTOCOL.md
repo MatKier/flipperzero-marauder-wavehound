@@ -25,10 +25,9 @@ leading `"> "` from every received line before parsing.
 |---------|---------|
 | `stopscan` | Stop any scan or hunt; return to idle. Sent on startup, when leaving a scan/hunt, and on app exit. |
 | `channel` | Print the current channel. Used as a liveness poll while idle (any received line proves the link is up). |
-| `channel -s <ch>` | Park the radio on channel `<ch>` (1–13). |
-| `settings -s ChanHop enable` / `disable` | Turn Marauder's channel hopping on (scan/hunt all channels) or off (stay parked). |
+| `channel -s <ch>` | Seed the radio onto channel `<ch>` (1–13) before a hunt, so it locks on quickly. It is **not** a hard park: Marauder's `scanall` and `foxhunt` manage the channel themselves (see below). |
 | `clearlist -a` | Clear the board's AP **and** station lists, so the next scan's indices restart at 0. Sent before a fresh scan, never on a resume. |
-| `scanall` | Start a combined AP + station scan (`WIFI_SCAN_AP_STA`). Streams AP and station lines until `stopscan`. |
+| `scanall` | Start a combined AP + station scan (`WIFI_SCAN_AP_STA`). Streams AP and station lines until `stopscan`. It always sweeps every channel (the `ChanHop` setting does not apply to this mode), so a channel choice in the app can't narrow the scan — it only seeds a later hunt. |
 | `add -a -b <mac> -ch <ch> [-e <ssid>]` | Add an access point by MAC to the board's list (channel defaults to 1 for auto). Used so a hand-typed or saved MAC can be hunted; the board replies `Added AP [<index>]...`. |
 | `foxhunt -w <ap_index>` | Fox-hunt the AP at `<ap_index>` in the board's list. Streams RSSI samples. |
 | `foxhunt -s <ap_index> <sta_index>` | Fox-hunt the station `<sta_index>` associated with AP `<ap_index>`. |
@@ -46,9 +45,9 @@ targets.
 | Line shape | When / meaning |
 |------------|----------------|
 | `<rssi> Ch: <ch> <bssid> ESSID: <essid> <bb> <bb>` | One access point from `scanall`, printed once when first heard. `<rssi>` dBm, `<ch>` 1–13, `<bssid>` the MAC, `<essid>` the SSID (the board prints the BSSID in place of the SSID for hidden networks), and two trailing beacon capability bytes Wavehound strips. The N-th distinct AP line is Marauder list index N-1. |
-| `<n>: ap: <ap_mac> -> sta: <sta_mac>` or `<n>: sta: <sta_mac> -> ap: <ap_mac>` | One station from `scanall`, printed once when first associated with a known AP. `<n>` is the station list size after insert, so the station's index is `n-1`; the AP is matched by `<ap_mac>` to an AP already seen. |
-| `<name> RSSI: <dBm>` | One fox-hunt sample, printed per matching frame. Wavehound accumulates these over 100 ms windows into the hunt meter/graph/geiger. Marauder forces the target's channel while it is fresh and hops after ~1.5 s of silence. |
-| `Added AP [<index>][CH:<ch>] <essid> (selected)` | Reply to `add -a`; `<index>` is where the MAC landed in the AP list, which the app then hunts with `foxhunt -w`. |
+| `<n>: ap: <ap_mac> -> sta: <sta_mac>` or `<n>: sta: <sta_mac> -> ap: <ap_mac>` | One station from `scanall`, printed once when first associated with a known AP. `<n>` is Marauder's station-list size; the app does not read it and instead numbers stations by the order it sees them (same result, since each station is printed exactly once). The AP is matched by `<ap_mac>` to an AP already seen. |
+| `<name> RSSI: <dBm>` | One fox-hunt sample, printed per matching frame. Wavehound accumulates these over 100 ms windows into the hunt meter/graph/geiger. Marauder forces the target's channel while it is fresh and hops after ~1.5 s of silence (so a true channel "pin" is not possible). |
+| `Added AP [<index>]...` / `AP already exists at [<index>]:...` | Reply to `add -a`: the first on a fresh add, the second when that MAC was already in the list. Either way `<index>` is the AP-list slot the app then hunts with `foxhunt -w`. |
 | `<label>: <value>` | Reply lines to `info` (e.g. `Firmware: Marauder`, `Version: v1.19.0`, `Hardware: ...`, `App partition: ...`, `ESP-IDF: ...`, `Station MAC: ...`, `AP MAC: ...`). Shown as-is on the Board info screen; there is no end marker, so the screen renders progressively. |
 
 ## Dropped Wavehound features

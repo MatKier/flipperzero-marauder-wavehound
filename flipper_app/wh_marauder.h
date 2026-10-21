@@ -19,13 +19,7 @@ typedef struct WavehoundApp WavehoundApp;
 /** Stop whatever the board is doing (scan / hunt) and return to idle. */
 void wh_marauder_stop(WavehoundApp* app);
 
-/** Bare `channel` query: prints the current channel. Used as a liveness poll. */
-void wh_marauder_poll(WavehoundApp* app);
-
-/** `settings -s ChanHop enable|disable` -- controls whether scans/hunts hop. */
-void wh_marauder_set_hop(WavehoundApp* app, bool on);
-
-/** `channel -s <ch>`: park the radio on one channel (1..14). */
+/** `channel -s <ch>`: seed the radio onto one channel (1..14). */
 void wh_marauder_set_channel(WavehoundApp* app, uint8_t channel);
 
 /** Clear the board's AP + station lists so the next scan's indices start at 0. */
@@ -34,9 +28,8 @@ void wh_marauder_clear(WavehoundApp* app);
 /** Start a combined AP + station scan (`scanall`). */
 void wh_marauder_scan(WavehoundApp* app);
 
-/** `info` / `info -a <ap_index>`: board identity, or one AP's detail. */
+/** `info`: board identity (firmware, hardware, partition, IDF, MACs). */
 void wh_marauder_info(WavehoundApp* app);
-void wh_marauder_info_ap(WavehoundApp* app, int16_t ap_index);
 
 /** `add -a -b <mac> -ch <ch> [-e <ssid>]`: add an AP by MAC (for typed-MAC
  * hunts). `channel` 0 is sent as 1. `ssid` may be NULL/empty. */

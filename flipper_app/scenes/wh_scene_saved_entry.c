@@ -46,7 +46,6 @@ bool wh_scene_saved_entry_on_event(void* context, SceneManagerEvent event) {
         strlcpy(app->target.mac, s->mac, sizeof(app->target.mac));
         strlcpy(app->target.name, s->name, sizeof(app->target.name));
         app->target.channel = s->channel;
-        app->target.pin_channel = s->channel != 0;
         wh_parse_mac(app->target.mac, app->mac_bytes);
         app->target.randomized = app->mac_bytes[0] & 0x02;
         app->channel_purpose = WhChannelForMacHunt;
