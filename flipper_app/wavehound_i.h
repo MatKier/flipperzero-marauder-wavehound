@@ -81,7 +81,6 @@ typedef struct {
     uint16_t frames;
     bool is_ap;
     bool randomized; /* locally administered MAC */
-    bool pin_channel; /* user chose the channel: board must not hop away */
     /* Marauder refers to fox-hunt targets by their list index, not MAC. */
     int16_t mo_index;  /* index in Marauder's AP list (-1 = none/typed MAC) */
     int16_t ap_index;  /* for a station: its AP's index in Marauder's AP list */
@@ -147,8 +146,8 @@ typedef struct WavehoundApp {
     WhTarget clients_ap;
     bool device_search_clients; /* device search picked a nearby AP: scope to its clients */
 
-    /* Board Info text, filled by the UART worker between INFO_BEGIN/INFO_END
-     * (guarded by results_mutex). */
+    /* Board Info text: the UART worker appends Marauder's `info` reply lines
+     * while board_mode is WhBoardInfo (guarded by results_mutex). */
     FuriString* board_info;
 
     /* Saved MACs (favorites), loaded from the SD card at startup. */

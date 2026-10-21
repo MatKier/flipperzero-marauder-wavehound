@@ -34,9 +34,10 @@ uint8_t wh_hunt_view_current_channel(WhHuntView* hunt);
 /** Reset the view for a new target. */
 void wh_hunt_view_set_target(WhHuntView* hunt, const char* name, uint8_t channel);
 
-/** Feed one `H` sample from the board. Safe to call from any thread. `nf` is the
- * mean noise floor in dBm (0 when the target was not heard, or from firmware too
- * old to send it). */
+/** Feed one aggregated hunt sample (a 100 ms window of Marauder RSSI frames).
+ * Safe to call from any thread. `frames` is how many frames were heard in the
+ * window (0 = silent), `avg`/`max` the dBm over them, `locked` whether the hunt
+ * is parked on a channel (vs. hopping). */
 void wh_hunt_view_push_sample(
     WhHuntView* hunt,
     uint8_t channel,
@@ -44,5 +45,4 @@ void wh_hunt_view_push_sample(
     int8_t last,
     int8_t avg,
     int8_t max,
-    bool locked,
-    int8_t nf);
+    bool locked);

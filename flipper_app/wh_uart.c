@@ -7,7 +7,7 @@
 #define WH_UART_BAUD 115200
 #define WH_RX_BUF_SIZE 1024
 #define WH_LINE_MAX 160
-#define WH_PING_INTERVAL_MS 1500
+#define WH_POLL_INTERVAL_MS 1500
 #define WH_ALIVE_TIMEOUT_MS 4000
 
 typedef enum {
@@ -40,7 +40,7 @@ static int32_t wh_uart_worker(void* context) {
     WhUart* uart = context;
     char line[WH_LINE_MAX];
     size_t len = 0;
-    uint32_t last_ping = 0;
+    uint32_t last_poll = 0;
 
     for(;;) {
         uint32_t events =
@@ -70,9 +70,9 @@ static int32_t wh_uart_worker(void* context) {
          * scanning/hunting). A bare `channel` just prints the current channel,
          * which both proves the link is up and gives us a fresh RX timestamp. */
         uint32_t now = furi_get_tick();
-        if(now - uart->last_rx_tick > furi_ms_to_ticks(WH_PING_INTERVAL_MS) &&
-           now - last_ping > furi_ms_to_ticks(WH_PING_INTERVAL_MS)) {
-            last_ping = now;
+        if(now - uart->last_rx_tick > furi_ms_to_ticks(WH_POLL_INTERVAL_MS) &&
+           now - last_poll > furi_ms_to_ticks(WH_POLL_INTERVAL_MS)) {
+            last_poll = now;
             wh_uart_send(uart, "channel");
         }
     }

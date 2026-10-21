@@ -12,14 +12,6 @@ void wh_marauder_stop(WavehoundApp* app) {
     wh_send(app, "stopscan");
 }
 
-void wh_marauder_poll(WavehoundApp* app) {
-    wh_send(app, "channel");
-}
-
-void wh_marauder_set_hop(WavehoundApp* app, bool on) {
-    wh_send(app, on ? "settings -s ChanHop enable" : "settings -s ChanHop disable");
-}
-
 void wh_marauder_set_channel(WavehoundApp* app, uint8_t channel) {
     char cmd[24];
     snprintf(cmd, sizeof(cmd), "channel -s %u", channel);
@@ -36,12 +28,6 @@ void wh_marauder_scan(WavehoundApp* app) {
 
 void wh_marauder_info(WavehoundApp* app) {
     wh_send(app, "info");
-}
-
-void wh_marauder_info_ap(WavehoundApp* app, int16_t ap_index) {
-    char cmd[24];
-    snprintf(cmd, sizeof(cmd), "info -a %d", ap_index);
-    wh_send(app, cmd);
 }
 
 void wh_marauder_add_ap(WavehoundApp* app, const char* mac, uint8_t channel, const char* ssid) {

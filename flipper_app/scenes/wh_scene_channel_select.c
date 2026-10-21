@@ -98,7 +98,6 @@ bool wh_scene_channel_select_on_event(void* context, SceneManagerEvent event) {
         app->device_search_clients = false; /* a plain channel: all devices, not scoped */
     } else {
         app->target.channel = ch;
-        app->target.pin_channel = ch != 0;
     }
     wh_scene_channel_select_proceed(app);
     return true;

@@ -8,6 +8,9 @@
   per-frame RSSI stream.
 - Removed the channel-spectrum sweep and the noise-floor readout: Marauder
   exposes no serial equivalent for them.
+- Board info now reflects Marauder's `info` (firmware, hardware, app partition,
+  ESP-IDF version and MAC addresses); the old board-firmware health fields
+  (heap, uptime, chip temperature, reset reason) are no longer available.
 
 ## v1.11
 

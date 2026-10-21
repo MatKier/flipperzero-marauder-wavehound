@@ -161,11 +161,10 @@ void wh_hunt_feed_flush(WavehoundApp* app) {
     furi_mutex_release(app->results_mutex);
 
     int8_t avg = frames ? (int8_t)(sum / (int32_t)frames) : 0;
-    /* locked = we are parked on a channel (not auto-hopping). nf is unknown on
-     * Marauder, so always 0 (the view hides the marker when nf == 0). */
+    /* locked = we are parked on a channel (not auto-hopping). */
     wh_hunt_view_push_sample(
         app->hunt, app->hunt_channel, frames, last, avg, frames ? max : 0,
-        app->hunt_channel != 0, 0);
+        app->hunt_channel != 0);
 }
 
 /* Hunt view asks (Right key) to save the current target. */

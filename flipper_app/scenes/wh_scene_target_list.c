@@ -224,9 +224,8 @@ bool wh_scene_target_list_on_event(void* context, SceneManagerEvent event) {
             app->clients_ap = picked_target;
             app->device_search_clients = true;
         } else {
-            /* MAC hunt only needs the channel number to pin the typed MAC. */
+            /* MAC hunt only needs the channel number to seed the typed MAC's hunt. */
             app->target.channel = picked_target.channel;
-            app->target.pin_channel = true;
         }
         app->picking_ap_channel = false;
         app->channel_pick_pending = true;
@@ -236,11 +235,6 @@ bool wh_scene_target_list_on_event(void* context, SceneManagerEvent event) {
     }
 
     app->target = picked_target;
-    /* A device search parked on a channel by the user keeps the hunt there too;
-     * a client is always on its AP's channel, so pin the hunt there as well. */
-    app->target.pin_channel =
-        (app->search_kind == WhSearchDevices && app->device_channel != 0) ||
-        app->search_kind == WhSearchClients;
 
     /* Keep the found list when we come back from Details, and land back on the
      * row just picked. */
