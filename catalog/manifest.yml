@@ -16,7 +16,7 @@
 sourcecode:
   type: git
   location:
-    origin: https://github.com/MatKier/flipperzero-wavehound.git
+    origin: https://github.com/MatKier/flipperzero-marauder-wavehound.git
     commit_sha: 74d275a49aad0ed8c467f0dd7cc90cc81379508a
     subdir: .
 

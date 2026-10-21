@@ -11,5 +11,5 @@ App(
     fap_version="2.0",
     fap_description="WiFi fox hunting for the ESP32 Marauder (v1.19.0) dev board",
     fap_author="Mathias Kiermeier",
-    fap_weburl="https://github.com/MatKier/flipperzero-wavehound",
+    fap_weburl="https://github.com/MatKier/flipperzero-marauder-wavehound",
 )
