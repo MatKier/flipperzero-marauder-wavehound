@@ -61,13 +61,15 @@ static WhTarget* wh_results_slot(WavehoundApp* app, const char* mac) {
 
 /* Marauder's AP list is indexed by the order APs are first printed; match an
  * already-seen BSSID to recover its index for a station's "-> ap:" reference. */
-static int16_t wh_ap_index_for_mac(WavehoundApp* app, const uint8_t mac[6]) {
+static int16_t wh_ap_index_for_mac(WavehoundApp* app, const uint8_t mac[6], uint8_t* out_channel) {
     char s[18];
     snprintf(s, sizeof(s), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3],
              mac[4], mac[5]);
     for(size_t i = 0; i < app->result_count; i++) {
-        if(app->results[i].is_ap && strcmp(app->results[i].mac, s) == 0)
+        if(app->results[i].is_ap && strcmp(app->results[i].mac, s) == 0) {
+            if(out_channel) *out_channel = app->results[i].channel;
             return app->results[i].mo_index;
+        }
     }
     return -1;
 }
@@ -95,7 +97,11 @@ static void wh_on_scan_line(WavehoundApp* app, char* line) {
             strlcpy(t->mac, sta.sta_mac_str, sizeof(t->mac));
             t->is_ap = false;
             t->randomized = (sta.sta_mac[0] & 0x02) != 0;
-            t->ap_index = wh_ap_index_for_mac(app, sta.ap_mac);
+            /* A station line carries no channel; inherit the parent AP's, so
+             * the hunt screen shows the real channel instead of "?ch0". */
+            uint8_t ap_channel = 0;
+            t->ap_index = wh_ap_index_for_mac(app, sta.ap_mac, &ap_channel);
+            if(ap_channel) t->channel = ap_channel;
             /* Marauder prints "<n>: " where n is the post-insert list size, so
              * this station's index is n-1; we track it by appearance order. */
             if(t->sta_index < 0) t->sta_index = (int16_t)(app->scan_sta_count++);
