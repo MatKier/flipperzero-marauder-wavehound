@@ -6,6 +6,7 @@
  * strength; the Flipper turns it into a meter, a graph and Geiger clicks.
  */
 #include "wavehound_i.h"
+#include "wh_marauder.h"
 #include "wh_store.h"
 
 #include <furi_hal.h>
@@ -41,121 +42,130 @@ bool wh_parse_mac(const char* str, uint8_t mac[6]) {
 
 /* ---------- board line parsing (UART worker thread) ---------- */
 
-static char* next_field(char** cursor) {
-    char* start = *cursor;
-    if(!start) return NULL;
-    char* comma = strchr(start, ',');
-    if(comma) {
-        *comma = '\0';
-        *cursor = comma + 1;
-    } else {
-        *cursor = NULL;
-    }
-    return start;
-}
-
-static int field_int(char** cursor) {
-    char* f = next_field(cursor);
-    return f ? atoi(f) : 0;
-}
-
-/* A new discovery started: clear the results, unless the scan is a resume
- * (returning from a result's Details), which keeps what was already found. */
-static void wh_results_begin(WavehoundApp* app) {
-    furi_mutex_acquire(app->results_mutex, FuriWaitForever);
-    if(app->results_keep_begins)
-        app->results_keep_begins--;
-    else
-        app->result_count = 0;
-    furi_mutex_release(app->results_mutex);
-}
-
-/* Find an existing result by MAC, or reserve a new slot for it. Returns NULL
- * only when the table is full. Caller must release results_mutex. Continuous
- * discovery may re-send a MAC, and the live list appends in discovery order, so
- * matching keeps each device in its original slot instead of duplicating it. */
+/* Find an existing result by MAC string, or reserve a new slot. Returns NULL
+ * only when the table is full. Caller must hold results_mutex. Marauder may
+ * re-send a device, and the live list appends in discovery order, so matching
+ * keeps each device in its original slot instead of duplicating it. */
 static WhTarget* wh_results_slot(WavehoundApp* app, const char* mac) {
-    furi_mutex_acquire(app->results_mutex, FuriWaitForever);
     for(size_t i = 0; i < app->result_count; i++) {
         if(strcmp(app->results[i].mac, mac) == 0) return &app->results[i];
     }
     if(app->result_count >= WH_MAX_RESULTS) return NULL;
     WhTarget* t = &app->results[app->result_count++];
     memset(t, 0, sizeof(WhTarget));
+    t->mo_index = -1;
+    t->ap_index = -1;
+    t->sta_index = -1;
     return t;
+}
+
+/* Marauder's AP list is indexed by the order APs are first printed; match an
+ * already-seen BSSID to recover its index for a station's "-> ap:" reference. */
+static int16_t wh_ap_index_for_mac(WavehoundApp* app, const uint8_t mac[6]) {
+    char s[18];
+    snprintf(s, sizeof(s), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3],
+             mac[4], mac[5]);
+    for(size_t i = 0; i < app->result_count; i++) {
+        if(app->results[i].is_ap && strcmp(app->results[i].mac, s) == 0)
+            return app->results[i].mo_index;
+    }
+    return -1;
+}
+
+static void wh_on_scan_line(WavehoundApp* app, char* line) {
+    WhMarauderAp ap;
+    WhMarauderSta sta;
+    if(wh_marauder_parse_ap_line(line, &ap)) {
+        furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+        WhTarget* t = wh_results_slot(app, ap.mac_str);
+        if(t) {
+            strlcpy(t->mac, ap.mac_str, sizeof(t->mac));
+            strlcpy(t->name, ap.ssid, sizeof(t->name));
+            t->channel = ap.channel;
+            t->rssi = ap.rssi;
+            t->is_ap = true;
+            t->randomized = (ap.mac[0] & 0x02) != 0;
+            if(t->mo_index < 0) t->mo_index = (int16_t)app->scan_ap_count++;
+        }
+        furi_mutex_release(app->results_mutex);
+    } else if(wh_marauder_parse_sta_line(line, &sta)) {
+        furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+        WhTarget* t = wh_results_slot(app, sta.sta_mac_str);
+        if(t && !t->is_ap) {
+            strlcpy(t->mac, sta.sta_mac_str, sizeof(t->mac));
+            t->is_ap = false;
+            t->randomized = (sta.sta_mac[0] & 0x02) != 0;
+            t->ap_index = wh_ap_index_for_mac(app, sta.ap_mac);
+            /* Marauder prints "<n>: " where n is the post-insert list size, so
+             * this station's index is n-1; we track it by appearance order. */
+            if(t->sta_index < 0) t->sta_index = (int16_t)(app->scan_sta_count++);
+        }
+        furi_mutex_release(app->results_mutex);
+    }
 }
 
 static void wh_on_line(char* line, void* context) {
     WavehoundApp* app = context;
-    char* cur = line;
-    const char* tag = next_field(&cur);
 
-    if(strcmp(tag, "H") == 0) {
-        uint8_t ch = field_int(&cur);
-        uint32_t frames = field_int(&cur);
-        int8_t last = field_int(&cur);
-        int8_t avg = field_int(&cur);
-        int8_t max = field_int(&cur);
-        bool locked = field_int(&cur) != 0;
-        int8_t nf = field_int(&cur); /* 0 from older firmware (field absent) */
-        wh_hunt_view_push_sample(app->hunt, ch, frames, last, avg, max, locked, nf);
-    } else if(strcmp(tag, "S") == 0) {
-        uint8_t ch = field_int(&cur);
-        uint32_t frames = field_int(&cur);
-        uint32_t bytes = field_int(&cur);
-        int8_t rssi = field_int(&cur);
-        wh_spectrum_view_push_channel(app->spectrum, ch, frames, bytes, rssi);
-    } else if(strcmp(tag, "U") == 0) {
-        wh_spectrum_view_push_unique(app->spectrum, field_int(&cur));
-    } else if(strcmp(tag, "DISCOVER_BEGIN") == 0) {
-        wh_results_begin(app);
-    } else if(strcmp(tag, "DEV") == 0) {
-        /* DEV,<mac>,<ch>,<rssi>,<frames>,<flags>,<ssid...> */
-        const char* mac = next_field(&cur);
-        uint8_t ch = field_int(&cur);
-        int8_t rssi = field_int(&cur);
-        uint16_t frames = field_int(&cur);
-        const char* flags = next_field(&cur);
-        if(!mac || !flags) return;
-        WhTarget* t = wh_results_slot(app, mac);
-        if(t) {
-            strlcpy(t->mac, mac, sizeof(t->mac));
-            strlcpy(t->name, cur ? cur : "", sizeof(t->name));
-            t->channel = ch;
-            t->rssi = rssi;
-            t->frames = frames;
-            t->is_ap = strchr(flags, 'A') != NULL;
-            t->randomized = strchr(flags, 'R') != NULL;
-            /* Security + PHY codes (APs only; absent from older firmware). */
-            const char* sec = strchr(flags, 'o') ? "Open" :
-                              strchr(flags, 'w') ? "WEP" :
-                              strchr(flags, '1') ? "WPA" :
-                              strchr(flags, '2') ? "WPA2" :
-                              strchr(flags, '3') ? "WPA3" : "";
-            strlcpy(t->security, sec, sizeof(t->security));
-            const char* phy = strchr(flags, 'n') ? "n" :
-                              strchr(flags, 'c') ? "ac" :
-                              strchr(flags, 'x') ? "ax" :
-                              strchr(flags, 'g') ? "g" : "";
-            strlcpy(t->phy, phy, sizeof(t->phy));
-        }
-        furi_mutex_release(app->results_mutex);
-    } else if(strcmp(tag, "INFO_BEGIN") == 0) {
-        furi_mutex_acquire(app->results_mutex, FuriWaitForever);
-        furi_string_set(app->board_info, "\e#Board info\n");
-        furi_mutex_release(app->results_mutex);
-    } else if(strcmp(tag, "BI") == 0) {
-        /* BI,<label>,<value...> -- value is the rest of the line (no commas). */
-        const char* label = next_field(&cur);
-        if(label) {
+    /* Marauder prints its "> " prompt without a newline, so it prefixes the
+     * first streamed line after a command (e.g. "> -45 Ch: 6 .."). Strip any
+     * such leading prompt(s) before parsing. */
+    while(line[0] == '>' && line[1] == ' ') line += 2;
+
+    switch(app->board_mode) {
+    case WhBoardScanning:
+        wh_on_scan_line(app, line);
+        break;
+
+    case WhBoardHunting: {
+        int8_t rssi;
+        if(wh_marauder_parse_foxhunt(line, &rssi)) {
             furi_mutex_acquire(app->results_mutex, FuriWaitForever);
-            furi_string_cat_printf(app->board_info, "%s: %s\n", label, cur ? cur : "");
+            app->hunt_frames++;
+            app->hunt_sum += rssi;
+            app->hunt_last = rssi;
+            if(app->hunt_frames == 1 || rssi > app->hunt_max) app->hunt_max = rssi;
             furi_mutex_release(app->results_mutex);
         }
-    } else if(strcmp(tag, "INFO_END") == 0) {
-        view_dispatcher_send_custom_event(app->view_dispatcher, WhEventBoardInfoReady);
+        break;
     }
-    /* READY / PONG / OK / ERR only refresh the liveness timestamp. */
+
+    case WhBoardInfo:
+        /* Collect "<label>: <value>" lines; the scene refreshes on its tick. */
+        if(strchr(line, ':')) {
+            furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+            furi_string_cat_printf(app->board_info, "%s\n", line);
+            furi_mutex_release(app->results_mutex);
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    /* "Added AP [n]" can arrive in any mode after a typed-MAC add. */
+    int16_t idx;
+    if(wh_marauder_parse_added_ap(line, &idx)) app->pending_ap_index = idx;
+}
+
+/* Drain the fox-hunt RSSI accumulator into the hunt view as one 100 ms sample. */
+void wh_hunt_feed_flush(WavehoundApp* app) {
+    furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+    uint16_t frames = app->hunt_frames;
+    int32_t sum = app->hunt_sum;
+    int8_t last = app->hunt_last;
+    int8_t max = app->hunt_max;
+    app->hunt_frames = 0;
+    app->hunt_sum = 0;
+    app->hunt_max = 0;
+    furi_mutex_release(app->results_mutex);
+
+    int8_t avg = frames ? (int8_t)(sum / (int32_t)frames) : 0;
+    /* locked = we are parked on a channel (not auto-hopping). nf is unknown on
+     * Marauder, so always 0 (the view hides the marker when nf == 0). */
+    wh_hunt_view_push_sample(
+        app->hunt, app->hunt_channel, frames, last, avg, frames ? max : 0,
+        app->hunt_channel != 0, 0);
 }
 
 /* Hunt view asks (Right key) to save the current target. */
@@ -212,9 +222,6 @@ static WavehoundApp* wh_app_alloc(void) {
     app->hunt = wh_hunt_view_alloc();
     wh_hunt_view_set_save_callback(app->hunt, wh_hunt_save_cb, app);
     view_dispatcher_add_view(app->view_dispatcher, WhViewHunt, wh_hunt_view_get_view(app->hunt));
-    app->spectrum = wh_spectrum_view_alloc();
-    view_dispatcher_add_view(
-        app->view_dispatcher, WhViewSpectrum, wh_spectrum_view_get_view(app->spectrum));
     app->var_item_list = variable_item_list_alloc();
     view_dispatcher_add_view(
         app->view_dispatcher, WhViewVarItemList, variable_item_list_get_view(app->var_item_list));
@@ -237,7 +244,6 @@ static void wh_app_free(WavehoundApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, WhViewTextInput);
     view_dispatcher_remove_view(app->view_dispatcher, WhViewWidget);
     view_dispatcher_remove_view(app->view_dispatcher, WhViewHunt);
-    view_dispatcher_remove_view(app->view_dispatcher, WhViewSpectrum);
     view_dispatcher_remove_view(app->view_dispatcher, WhViewVarItemList);
     submenu_free(app->submenu);
     byte_input_free(app->byte_input);
@@ -245,7 +251,6 @@ static void wh_app_free(WavehoundApp* app) {
     widget_free(app->widget);
     variable_item_list_free(app->var_item_list);
     wh_hunt_view_free(app->hunt);
-    wh_spectrum_view_free(app->spectrum);
 
     scene_manager_free(app->scene_manager);
     view_dispatcher_free(app->view_dispatcher);
@@ -285,7 +290,7 @@ int32_t wavehound_app(void* p) {
 
     app->uart = wh_uart_alloc(wh_on_line, app);
     if(app->uart) {
-        wh_send(app, "STOP");
+        wh_marauder_stop(app); /* leave whatever the board was doing */
     } else {
         FURI_LOG_E(TAG, "USART busy");
     }
@@ -294,9 +299,9 @@ int32_t wavehound_app(void* p) {
     view_dispatcher_run(app->view_dispatcher);
 
     if(app->uart) {
-        /* Leaving the app: park the board dark (STOP would leave the idle LED
-         * lit, and the board stays powered on the Flipper's always-on 3V3). */
-        wh_send(app, "SLEEP");
+        /* Leaving the app: stop any scan/hunt. The board stays powered on the
+         * Flipper's always-on 3V3 and keeps its own idle state. */
+        wh_marauder_stop(app);
         wh_uart_free(app->uart);
     }
     if(app->otg_enabled_by_us) furi_hal_power_disable_otg();

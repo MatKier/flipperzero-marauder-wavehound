@@ -39,6 +39,10 @@ bool wh_scene_saved_entry_on_event(void* context, SceneManagerEvent event) {
         /* Seed the target and open the channel picker (pre-selects the saved
          * channel), same as a scan pick. */
         memset(&app->target, 0, sizeof(WhTarget));
+        /* A saved MAC is not in Marauder's list: the hunt adds it with `add -a`. */
+        app->target.mo_index = -1;
+        app->target.ap_index = -1;
+        app->target.sta_index = -1;
         strlcpy(app->target.mac, s->mac, sizeof(app->target.mac));
         strlcpy(app->target.name, s->name, sizeof(app->target.name));
         app->target.channel = s->channel;

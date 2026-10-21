@@ -66,12 +66,14 @@ static int32_t wh_uart_worker(void* context) {
             }
         }
 
-        /* Keep-alive: only ping when the board has been quiet (it streams in hunt/spectrum). */
+        /* Keep-alive: only poll when the board has been quiet (it streams while
+         * scanning/hunting). A bare `channel` just prints the current channel,
+         * which both proves the link is up and gives us a fresh RX timestamp. */
         uint32_t now = furi_get_tick();
         if(now - uart->last_rx_tick > furi_ms_to_ticks(WH_PING_INTERVAL_MS) &&
            now - last_ping > furi_ms_to_ticks(WH_PING_INTERVAL_MS)) {
             last_ping = now;
-            wh_uart_send(uart, "PING");
+            wh_uart_send(uart, "channel");
         }
     }
     return 0;
