@@ -1,3 +1,30 @@
+## v2.1
+
+- Hunting now always follows the target you picked. Previously, going back from
+  a result's details and hunting another access point could follow a different
+  network, because the board renumbers its list on every scan; Wavehound now
+  looks the target up by MAC on the board each time it starts a hunt.
+- The hunt waits for the board to confirm it started and retries if it didn't.
+  The screen shows "starting..." and, if something goes wrong, why: no board
+  reply, MAC rejected, low board memory, start failed, or no board.
+- The hunt screen's channel is the one the board reports. With "Auto" that is
+  the channel the board already knows for that MAC (channel 1 for a new one).
+  A channel you pick is now applied even if the board had the MAC on another
+  channel.
+- An access point's security on the details screen is no longer shown as
+  "Open" for entries the board never actually scanned.
+- "Clients of nearby AP" lists a client even before the AP's own row appears.
+  The scan list says "(full)" when it can't take more, and AP-only scans no
+  longer fill up with stations. Leftover rows from the previous scan no longer
+  appear after "Search again".
+- The scan list, hunt and Board info screens say "No board" when the board
+  stays silent.
+- Saving a MAC tells you when the list is full or the SD card write failed.
+  Saved MACs and settings are written safely (a failed write keeps the old
+  file), and invalid MACs in a hand-edited saved list are skipped.
+- The vendor line reads "no oui.db" when the vendor database is missing, and
+  "multicast" for group addresses.
+
 ## v2.0
 
 - Wavehound now targets stock **ESP32 Marauder firmware v1.19.0** instead of

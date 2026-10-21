@@ -37,15 +37,14 @@ bool wh_scene_saved_entry_on_event(void* context, SceneManagerEvent event) {
     switch(event.event) {
     case ENTRY_HUNT:
         /* Seed the target and open the channel picker (pre-selects the saved
-         * channel), same as a scan pick. */
+         * channel), same as a scan pick. The hunt looks the MAC up (or adds
+         * it) in Marauder's list with `add -a`. Entries are validated on load,
+         * so the parse can only fail on a corrupted list -- don't hunt then. */
+        if(!wh_parse_mac(s->mac, app->mac_bytes)) return true;
         memset(&app->target, 0, sizeof(WhTarget));
-        /* A saved MAC is not in Marauder's list: the hunt adds it with `add -a`. */
-        app->target.mo_index = -1;
-        app->target.ap_index = -1;
         strlcpy(app->target.mac, s->mac, sizeof(app->target.mac));
         strlcpy(app->target.name, s->name, sizeof(app->target.name));
         app->target.channel = s->channel;
-        wh_parse_mac(app->target.mac, app->mac_bytes);
         app->target.randomized = app->mac_bytes[0] & 0x02;
         app->channel_purpose = WhChannelForMacHunt;
         app->from_saved_hunt = true; /* channel picker pre-selects per settings */
@@ -54,7 +53,7 @@ bool wh_scene_saved_entry_on_event(void* context, SceneManagerEvent event) {
     case ENTRY_EDIT:
         /* Load the working copy and open the editor. */
         strlcpy(app->name_buf, s->name, sizeof(app->name_buf));
-        wh_parse_mac(s->mac, app->mac_bytes);
+        if(!wh_parse_mac(s->mac, app->mac_bytes)) memset(app->mac_bytes, 0, sizeof(app->mac_bytes));
         app->edit_channel = s->channel;
         scene_manager_next_scene(app->scene_manager, WhSceneEditSaved);
         return true;

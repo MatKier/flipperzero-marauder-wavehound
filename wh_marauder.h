@@ -36,12 +36,17 @@ void wh_marauder_info(WavehoundApp* app);
 /** `info -a <ap_index>`: detail for one AP in the list (incl. its security). */
 void wh_marauder_info_ap(WavehoundApp* app, int16_t ap_index);
 
-/** `add -a -b <mac> -ch <ch> [-e <ssid>]`: add an AP by MAC (for typed-MAC
- * hunts). `channel` 0 is sent as 1. `ssid` may be NULL/empty. */
-void wh_marauder_add_ap(WavehoundApp* app, const char* mac, uint8_t channel, const char* ssid);
+/** Build `add -a -b <mac> -ch <ch>` into `out` (not sent). `channel` 0 is sent
+ * as 1. No `-e`: the entry's name stays the MAC, so nothing user- or
+ * air-controlled reaches Marauder's tokenizer. The caller sends it via
+ * wh_add_begin(), which needs the exact text to match Marauder's echo. */
+void wh_marauder_build_add_ap(char* out, size_t out_size, const char* mac, uint8_t channel);
 
 /** `foxhunt -w <ap_index>`: fox-hunt the list entry at `<ap_index>`. */
 void wh_marauder_foxhunt_ap(WavehoundApp* app, int16_t ap_index);
+
+/** Bare `channel`: ask for the board's current channel (reply: a bare int). */
+void wh_marauder_query_channel(WavehoundApp* app);
 
 /* ---- parsers (board -> app). All take a mutable line (may be tokenized). ---- */
 
@@ -67,11 +72,35 @@ bool wh_marauder_parse_ap_line(char* line, WhMarauderAp* out);
 /** `<n>: ap: <mac> -> sta: <mac>` or `<n>: sta: <mac> -> ap: <mac>`. */
 bool wh_marauder_parse_sta_line(char* line, WhMarauderSta* out);
 
-/** `"<name> RSSI: <dBm>"` (fox-hunt sample) -> true, writing *rssi. */
+/** `"<name> RSSI: <dBm>"` (fox-hunt sample) -> true, writing *rssi. Uses the
+ * last " RSSI: ", needs a non-blank name before it and an integer running to
+ * the end of the line (so `info -a`'s "    RSSI: -50" is rejected). */
 bool wh_marauder_parse_foxhunt(const char* line, int8_t* rssi);
 
-/** `Added AP [<index>][CH:..]..` -> true, writing *index. */
-bool wh_marauder_parse_added_ap(const char* line, int16_t* index);
+/** `Added AP [<index>][CH:..]..` or `AP already exists at [<index>]: ..` ->
+ * true, writing *index and whether the entry already existed. */
+bool wh_marauder_parse_added_ap(const char* line, int16_t* index, bool* existed);
+
+/** Why an `add -a` was refused. */
+typedef enum {
+    WhAddErrNone,
+    WhAddErrFormat, /* "Format must be XX:..", "BSSID required.." */
+    WhAddErrMemory, /* "Memory pressure: AP not added" */
+} WhAddErr;
+
+/** An `add -a` failure reply -> its kind, else WhAddErrNone. */
+WhAddErr wh_marauder_parse_add_error(const char* line);
+
+/** `Starting<name>. Stop with stopscan` printed when a `foxhunt` actually
+ * started (index in range, board not busy) -> true. */
+bool wh_marauder_parse_hunt_started(const char* line);
+
+/** Marauder echoes each command as `#<command>`; true if `line` is the echo of
+ * exactly `cmd`. */
+bool wh_marauder_is_echo(const char* line, const char* cmd);
+
+/** A bare integer line 1..14 (reply to `channel` / `channel -s`) -> true. */
+bool wh_marauder_parse_channel(const char* line, uint8_t* channel);
 
 /** `info -a` "Security: <value>" line -> true, writing a short token into `out`
  * ("Open"/"WEP"/"WPA"/"WPA2"/"WPA3"/"WAPI"). Marauder's richer values (e.g.

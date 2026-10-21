@@ -6,7 +6,11 @@
  * the OUI), with Hunt and Save actions. app->target and app->mac_bytes were set
  * by the target list. For an access point we also ask Marauder `info -a <idx>`
  * for its security and redraw when the reply arrives (scanall alone doesn't
- * report it). */
+ * report it). The index comes from an `add -a` handshake (scanall rebuilds the
+ * board's list, so no stored index can be trusted); only an entry that already
+ * existed -- i.e. one the scan put there -- has real security to report. */
+
+static bool s_info_asked; /* handshake resolved: info -a sent, or given up */
 
 static void wh_scene_details_button_cb(GuiButtonType result, InputType type, void* context) {
     WavehoundApp* app = context;
@@ -51,16 +55,42 @@ void wh_scene_details_on_enter(void* context) {
     wh_scene_details_render(app);
     view_dispatcher_switch_to_view(app->view_dispatcher, WhViewWidget);
 
-    /* Ask the board for this AP's security; the reply (WhEventApInfoReady)
-     * redraws the line. Only APs are in Marauder's list by index. */
-    if(app->target.is_ap && app->target.mo_index >= 0) {
-        app->board_mode = WhBoardApInfo;
-        wh_marauder_info_ap(app, app->target.mo_index);
+    /* Ask the board for this AP's security; the tick sends `info -a` once the
+     * add handshake has the index, and the reply (WhEventApInfoReady) redraws
+     * the line. Stations have no security to report. */
+    s_info_asked = !(app->target.is_ap && app->uart);
+    if(!s_info_asked) wh_add_begin(app, app->target.mac, app->target.channel);
+}
+
+/* Tick: once the add handshake resolves, ask for the AP's detail. */
+static void wh_scene_details_poll_add(WavehoundApp* app) {
+    furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+    const WhAddState state = app->add_state;
+    const int16_t index = app->add_index;
+    const bool existed = app->add_existed;
+    furi_mutex_release(app->results_mutex);
+
+    if(state == WhAddDone) {
+        s_info_asked = true;
+        /* A fresh add means the board's current list doesn't have it (not
+         * re-heard since scanall rebuilt the list, or printed but dropped for
+         * lack of memory): the new entry only carries default security
+         * ("Open"), so don't ask. */
+        if(!existed) return;
+        app->ap_info_synthetic = false;
+        wh_set_board_mode(app, WhBoardApInfo);
+        wh_marauder_info_ap(app, index);
+    } else if(state == WhAddFailed) {
+        s_info_asked = true; /* security is optional; leave it blank */
     }
 }
 
 bool wh_scene_details_on_event(void* context, SceneManagerEvent event) {
     WavehoundApp* app = context;
+    if(event.type == SceneManagerEventTypeTick) {
+        if(!s_info_asked) wh_scene_details_poll_add(app);
+        return false;
+    }
     if(event.type != SceneManagerEventTypeCustom) return false;
 
     if(event.event == WhEventApInfoReady) {
@@ -85,6 +115,9 @@ bool wh_scene_details_on_event(void* context, SceneManagerEvent event) {
 
 void wh_scene_details_on_exit(void* context) {
     WavehoundApp* app = context;
-    app->board_mode = WhBoardIdle;
+    wh_set_board_mode(app, WhBoardIdle);
+    furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+    app->add_state = WhAddIdle;
+    furi_mutex_release(app->results_mutex);
     widget_reset(app->widget);
 }

@@ -22,6 +22,24 @@ void wh_send(WavehoundApp* app, const char* line) {
     if(app->uart) wh_uart_send(app->uart, line);
 }
 
+void wh_set_board_mode(WavehoundApp* app, WhBoardMode mode) {
+    furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+    app->board_mode = mode;
+    furi_mutex_release(app->results_mutex);
+}
+
+void wh_add_begin(WavehoundApp* app, const char* mac, uint8_t channel) {
+    furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+    wh_marauder_build_add_ap(app->add_cmd, sizeof(app->add_cmd), mac, channel);
+    app->add_state = WhAddAwaitEcho;
+    app->add_index = -1;
+    app->add_existed = false;
+    app->add_error = WhAddErrNone;
+    furi_mutex_release(app->results_mutex);
+    /* Armed before sending, so the echo can't beat the state change. */
+    wh_send(app, app->add_cmd);
+}
+
 static int hex_nibble(char c) {
     if(c >= '0' && c <= '9') return c - '0';
     if(c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -44,8 +62,9 @@ bool wh_parse_mac(const char* str, uint8_t mac[6]) {
 
 /* Find an existing result by MAC string, or reserve a new slot. Returns NULL
  * only when the table is full. Caller must hold results_mutex. Marauder may
- * re-send a device, and the live list appends in discovery order, so matching
- * keeps each device in its original slot instead of duplicating it. */
+ * re-send a device (every scanall rebuilds its AP list and re-prints them), and
+ * the live list appends in discovery order, so matching keeps each device in
+ * its original slot instead of duplicating it. */
 static WhTarget* wh_results_slot(WavehoundApp* app, const char* mac) {
     for(size_t i = 0; i < app->result_count; i++) {
         if(strcmp(app->results[i].mac, mac) == 0) return &app->results[i];
@@ -53,24 +72,17 @@ static WhTarget* wh_results_slot(WavehoundApp* app, const char* mac) {
     if(app->result_count >= WH_MAX_RESULTS) return NULL;
     WhTarget* t = &app->results[app->result_count++];
     memset(t, 0, sizeof(WhTarget));
-    t->mo_index = -1;
-    t->ap_index = -1;
     return t;
 }
 
-/* Marauder's AP list is indexed by the order APs are first printed; match an
- * already-seen BSSID to recover its index for a station's "-> ap:" reference. */
-static int16_t wh_ap_index_for_mac(WavehoundApp* app, const uint8_t mac[6], uint8_t* out_channel) {
-    char s[18];
-    snprintf(s, sizeof(s), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3],
-             mac[4], mac[5]);
+/* Channel of an already-seen AP, or 0 if it hasn't been listed (yet). */
+static uint8_t wh_ap_channel_for_mac(WavehoundApp* app, const char* mac) {
     for(size_t i = 0; i < app->result_count; i++) {
-        if(app->results[i].is_ap && strcmp(app->results[i].mac, s) == 0) {
-            if(out_channel) *out_channel = app->results[i].channel;
-            return app->results[i].mo_index;
+        if(app->results[i].is_ap && strcmp(app->results[i].mac, mac) == 0) {
+            return app->results[i].channel;
         }
     }
-    return -1;
+    return 0;
 }
 
 static void wh_on_scan_line(WavehoundApp* app, char* line) {
@@ -86,10 +98,23 @@ static void wh_on_scan_line(WavehoundApp* app, char* line) {
             t->rssi = ap.rssi;
             t->is_ap = true;
             t->randomized = (ap.mac[0] & 0x02) != 0;
-            if(t->mo_index < 0) t->mo_index = (int16_t)app->scan_ap_count++;
+            t->ap_mac[0] = '\0';
+            /* Stations heard before their AP have no channel yet: inherit it. */
+            for(size_t i = 0; i < app->result_count; i++) {
+                WhTarget* s = &app->results[i];
+                if(!s->is_ap && !s->channel && strcmp(s->ap_mac, ap.mac_str) == 0) {
+                    s->channel = ap.channel;
+                }
+            }
         }
         furi_mutex_release(app->results_mutex);
     } else if(wh_marauder_parse_sta_line(line, &sta)) {
+        /* An AP-only search has no use for stations; don't let them fill the
+         * table and crowd out access points. */
+        if(app->search_kind == WhSearchAccessPoints) return;
+        char ap_mac[18];
+        snprintf(ap_mac, sizeof(ap_mac), "%02x:%02x:%02x:%02x:%02x:%02x", sta.ap_mac[0],
+                 sta.ap_mac[1], sta.ap_mac[2], sta.ap_mac[3], sta.ap_mac[4], sta.ap_mac[5]);
         furi_mutex_acquire(app->results_mutex, FuriWaitForever);
         WhTarget* t = wh_results_slot(app, sta.sta_mac_str);
         if(t && !t->is_ap) {
@@ -98,13 +123,41 @@ static void wh_on_scan_line(WavehoundApp* app, char* line) {
             t->randomized = (sta.sta_mac[0] & 0x02) != 0;
             /* A station line carries no channel; inherit the parent AP's, so
              * the hunt screen (and the add+foxhunt) use the real channel. The
-             * AP index feeds the "clients of this AP" filter. */
-            uint8_t ap_channel = 0;
-            t->ap_index = wh_ap_index_for_mac(app, sta.ap_mac, &ap_channel);
+             * AP's MAC feeds the "clients of this AP" filter. */
+            strlcpy(t->ap_mac, ap_mac, sizeof(t->ap_mac));
+            uint8_t ap_channel = wh_ap_channel_for_mac(app, ap_mac);
             if(ap_channel) t->channel = ap_channel;
         }
         furi_mutex_release(app->results_mutex);
     }
+}
+
+/* Feed a line to a pending `add -a` handshake. Returns true if it was consumed. */
+static bool wh_on_add_line(WavehoundApp* app, const char* line) {
+    bool consumed = false;
+    furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+    if(app->add_state == WhAddAwaitEcho) {
+        if(wh_marauder_is_echo(line, app->add_cmd)) {
+            app->add_state = WhAddAwaitReply;
+            consumed = true;
+        }
+    } else if(app->add_state == WhAddAwaitReply) {
+        int16_t idx;
+        bool existed;
+        WhAddErr err;
+        if(wh_marauder_parse_added_ap(line, &idx, &existed)) {
+            app->add_index = idx;
+            app->add_existed = existed;
+            app->add_state = WhAddDone;
+            consumed = true;
+        } else if((err = wh_marauder_parse_add_error(line)) != WhAddErrNone) {
+            app->add_error = err;
+            app->add_state = WhAddFailed;
+            consumed = true;
+        }
+    }
+    furi_mutex_release(app->results_mutex);
+    return consumed;
 }
 
 static void wh_on_line(char* line, void* context) {
@@ -115,14 +168,34 @@ static void wh_on_line(char* line, void* context) {
      * such leading prompt(s) before parsing. */
     while(line[0] == '>' && line[1] == ' ') line += 2;
 
+    /* An add handshake's echo/reply can arrive in any mode. */
+    if(wh_on_add_line(app, line)) return;
+
     switch(app->board_mode) {
+    case WhBoardScanArming:
+        /* Lines before the "#scanall" echo belong to the previous scan, which
+         * the board was still printing until it read our stopscan. Switch under
+         * the mutex so it can't undo a scene leaving (see wh_set_board_mode). */
+        if(wh_marauder_is_echo(line, "scanall")) {
+            furi_mutex_acquire(app->results_mutex, FuriWaitForever);
+            if(app->board_mode == WhBoardScanArming) app->board_mode = WhBoardScanning;
+            furi_mutex_release(app->results_mutex);
+        }
+        break;
+
     case WhBoardScanning:
         wh_on_scan_line(app, line);
         break;
 
     case WhBoardHunting: {
         int8_t rssi;
-        if(wh_marauder_parse_foxhunt(line, &rssi)) {
+        uint8_t channel;
+        if(wh_marauder_parse_hunt_started(line)) {
+            app->hunt_started = true;
+        } else if(app->hunt_started && wh_marauder_parse_channel(line, &channel)) {
+            /* Reply to `channel`/`channel -s`: where the board really is. */
+            app->hunt_channel = channel;
+        } else if(app->hunt_started && wh_marauder_parse_foxhunt(line, &rssi)) {
             furi_mutex_acquire(app->results_mutex, FuriWaitForever);
             app->hunt_frames++;
             app->hunt_sum += rssi;
@@ -134,18 +207,27 @@ static void wh_on_line(char* line, void* context) {
     }
 
     case WhBoardInfo:
-        /* Collect "<label>: <value>" lines; the scene refreshes on its tick. */
+        /* Collect "<label>: <value>" lines; the scene refreshes on its tick.
+         * Capped: the scene stays open as long as the user likes and anything
+         * with a colon (async chatter, garbage) would otherwise pile up. */
         if(strchr(line, ':')) {
             furi_mutex_acquire(app->results_mutex, FuriWaitForever);
-            furi_string_cat_printf(app->board_info, "%s\n", line);
+            if(furi_string_size(app->board_info) < WH_BOARD_INFO_MAX) {
+                furi_string_cat_printf(app->board_info, "%s\n", line);
+            }
             furi_mutex_release(app->results_mutex);
         }
         break;
 
     case WhBoardApInfo: {
-        /* info -a <idx> reply: pull out the one AP's security, drop the rest. */
+        /* info -a <idx> reply: pull out the one AP's security, drop the rest.
+         * An entry created by our own `add -a` (RSSI -127, never beaconed into
+         * the list) reports Marauder's default security, "Open" -- ignore it. */
         char sec[sizeof(app->target.security)];
-        if(wh_marauder_parse_security(line, sec, sizeof(sec))) {
+        if(strcmp(line, "    RSSI: -127") == 0) {
+            app->ap_info_synthetic = true;
+        } else if(wh_marauder_parse_security(line, sec, sizeof(sec))) {
+            if(app->ap_info_synthetic) break;
             furi_mutex_acquire(app->results_mutex, FuriWaitForever);
             strlcpy(app->target.security, sec, sizeof(app->target.security));
             furi_mutex_release(app->results_mutex);
@@ -157,10 +239,6 @@ static void wh_on_line(char* line, void* context) {
     default:
         break;
     }
-
-    /* "Added AP [n]" can arrive in any mode after a typed-MAC add. */
-    int16_t idx;
-    if(wh_marauder_parse_added_ap(line, &idx)) app->pending_ap_index = idx;
 }
 
 /* Drain the fox-hunt RSSI accumulator into the hunt view as one 100 ms sample. */
@@ -176,7 +254,7 @@ void wh_hunt_feed_flush(WavehoundApp* app) {
     furi_mutex_release(app->results_mutex);
 
     int8_t avg = frames ? (int8_t)(sum / (int32_t)frames) : 0;
-    /* locked = we are parked on a channel (not auto-hopping). */
+    /* locked = the board has reported the channel the hunt is parked on. */
     wh_hunt_view_push_sample(
         app->hunt, app->hunt_channel, frames, last, avg, frames ? max : 0,
         app->hunt_channel != 0);
@@ -312,6 +390,13 @@ int32_t wavehound_app(void* p) {
     scene_manager_next_scene(app->scene_manager, WhSceneStart);
     view_dispatcher_run(app->view_dispatcher);
 
+    /* scene_manager_free won't run the active scene's on_exit: make sure the
+     * hunt's feed timer can't fire into a freed UART/app. */
+    if(app->hunt_timer) {
+        furi_timer_stop(app->hunt_timer);
+        furi_timer_free(app->hunt_timer);
+        app->hunt_timer = NULL;
+    }
     if(app->uart) {
         /* Leaving the app: stop any scan/hunt. The board stays powered on the
          * Flipper's always-on 3V3 and keeps its own idle state. */

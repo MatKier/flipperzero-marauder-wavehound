@@ -22,6 +22,7 @@
 #define WH_MAX_CHANNEL 13
 #define WH_MAX_SAVED 64
 #define WH_SAVED_NAME_MAX 24
+#define WH_BOARD_INFO_MAX 2048
 
 typedef enum {
     WhViewSubmenu,
@@ -36,6 +37,7 @@ typedef enum {
  * line (Marauder's replies are plain text and overlap between modes). */
 typedef enum {
     WhBoardIdle,
+    WhBoardScanArming, /* scanall sent: drop lines until its "#scanall" echo */
     WhBoardScanning, /* scanall: AP + station lines */
     WhBoardHunting,  /* foxhunt: "<name> RSSI: <dBm>" samples */
     WhBoardInfo,     /* info: "<label>: <value>" block */
@@ -77,15 +79,27 @@ typedef struct {
     char mac[18];    /* "aa:bb:cc:dd:ee:ff" */
     char name[33];   /* SSID for access points, empty if hidden/unknown */
     char security[5]; /* "Open"/"WEP"/"WPA"/"WPA2"/"WPA3"/"WAPI", empty if unknown */
-    uint8_t channel; /* 0 = unknown, board hops */
+    uint8_t channel; /* 0 = unknown (Auto: the hunt uses the board's channel) */
     int8_t rssi;
     uint16_t frames;
     bool is_ap;
     bool randomized; /* locally administered MAC */
-    /* Marauder refers to fox-hunt AP targets by their list index, not MAC. */
-    int16_t mo_index;  /* index in Marauder's AP list (-1 = not an AP in the list) */
-    int16_t ap_index;  /* for a station: its AP's index, used by the clients filter */
+    /* For a station: the AP it was seen with (clients filter). Marauder list
+     * indices are never stored -- they are fetched by MAC at use time, see
+     * wh_add_begin(). */
+    char ap_mac[18];
 } WhTarget;
+
+/** Progress of an `add -a` handshake (wh_add_begin). Marauder answers with the
+ * entry's list index; replies only count after the board echoed our exact
+ * command, so a late reply to an earlier add can't be mistaken for ours. */
+typedef enum {
+    WhAddIdle,
+    WhAddAwaitEcho,  /* sent; waiting for "#<cmd>" */
+    WhAddAwaitReply, /* echoed; the next add reply is ours */
+    WhAddDone,       /* add_index is valid */
+    WhAddFailed,     /* add_error says why */
+} WhAddState;
 
 typedef struct WavehoundApp {
     Gui* gui;
@@ -109,9 +123,18 @@ typedef struct WavehoundApp {
 
     /* Marauder protocol state (see wh_marauder.c). */
     WhBoardMode board_mode;      /* how the UART worker reads incoming lines */
-    uint16_t scan_ap_count;      /* APs seen this scan = next Marauder AP index */
-    int16_t pending_ap_index;    /* index from "Added AP [n]" for an add+foxhunt */
-    uint8_t hunt_channel;        /* channel the hunt is parked on (0 = hopping) */
+    uint8_t hunt_channel;        /* channel the board reports during a hunt (0 = not yet known) */
+    bool hunt_started;           /* board confirmed the foxhunt started */
+    bool ap_info_synthetic;      /* info -a reply is for an entry we added (RSSI -127) */
+
+    /* add -a handshake, written by the worker. Guarded by results_mutex. */
+    WhAddState add_state;
+    int16_t add_index;
+    bool add_existed;            /* "already exists": the entry predates our add */
+    uint8_t add_error;           /* WhAddErr when add_state == WhAddFailed */
+    char add_cmd[48];            /* exact command sent, to match its echo */
+
+    FuriTimer* hunt_timer;       /* hunt scene's 100 ms feed timer (freed on exit too) */
 
     /* Fox-hunt RSSI accumulator: the worker adds each "RSSI:" sample here, the
      * hunt scene's 100 ms timer drains it into the hunt view. Guarded by
@@ -165,6 +188,14 @@ typedef struct WavehoundApp {
 
 /** Send a line to the board (no-op without a UART). */
 void wh_send(WavehoundApp* app, const char* line);
+
+/** Set how the worker reads lines. Takes results_mutex, so it is atomic with
+ * the worker's own ScanArming -> Scanning switch. */
+void wh_set_board_mode(WavehoundApp* app, WhBoardMode mode);
+
+/** Start an `add -a` handshake for `mac` (channel 0 = auto, added on ch 1).
+ * Poll app->add_state (under results_mutex) for the outcome. */
+void wh_add_begin(WavehoundApp* app, const char* mac, uint8_t channel);
 
 /** Parse "aa:bb:cc:dd:ee:ff" into bytes. Returns false on malformed input. */
 bool wh_parse_mac(const char* str, uint8_t mac[6]);
