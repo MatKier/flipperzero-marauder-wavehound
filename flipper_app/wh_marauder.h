@@ -9,6 +9,7 @@
  */
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* Opaque app pointer; wh_marauder_* command helpers send through wh_send(). */
@@ -30,6 +31,9 @@ void wh_marauder_scan(WavehoundApp* app);
 
 /** `info`: board identity (firmware, hardware, partition, IDF, MACs). */
 void wh_marauder_info(WavehoundApp* app);
+
+/** `info -a <ap_index>`: detail for one AP in the list (incl. its security). */
+void wh_marauder_info_ap(WavehoundApp* app, int16_t ap_index);
 
 /** `add -a -b <mac> -ch <ch> [-e <ssid>]`: add an AP by MAC (for typed-MAC
  * hunts). `channel` 0 is sent as 1. `ssid` may be NULL/empty. */
@@ -68,3 +72,9 @@ bool wh_marauder_parse_foxhunt(const char* line, int8_t* rssi);
 
 /** `Added AP [<index>][CH:..]..` -> true, writing *index. */
 bool wh_marauder_parse_added_ap(const char* line, int16_t* index);
+
+/** `info -a` "Security: <value>" line -> true, writing a short token into `out`
+ * ("Open"/"WEP"/"WPA"/"WPA2"/"WPA3"/"WAPI"). Marauder's richer values (e.g.
+ * "WPA2 Enterprise", "WPA/WPA2 Mixed") map to the base token; "Unknown" and
+ * unrecognized values return false (leaving the field empty). */
+bool wh_marauder_parse_security(const char* line, char* out, size_t out_size);
