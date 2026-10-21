@@ -28,7 +28,6 @@ bool wh_scene_mac_input_on_event(void* context, SceneManagerEvent event) {
     /* A typed MAC is not in Marauder's list: the hunt adds it with `add -a`. */
     app->target.mo_index = -1;
     app->target.ap_index = -1;
-    app->target.sta_index = -1;
     snprintf(
         app->target.mac,
         sizeof(app->target.mac),

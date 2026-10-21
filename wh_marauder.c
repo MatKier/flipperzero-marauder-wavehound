@@ -50,12 +50,6 @@ void wh_marauder_foxhunt_ap(WavehoundApp* app, int16_t ap_index) {
     wh_send(app, cmd);
 }
 
-void wh_marauder_foxhunt_sta(WavehoundApp* app, int16_t ap_index, int16_t sta_index) {
-    char cmd[32];
-    snprintf(cmd, sizeof(cmd), "foxhunt -s %d %d", ap_index, sta_index);
-    wh_send(app, cmd);
-}
-
 /* ---------- parse helpers ---------- */
 
 static int hex_nibble(char c) {

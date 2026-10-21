@@ -134,7 +134,6 @@ static void wh_scene_target_list_restart(WavehoundApp* app) {
     furi_mutex_acquire(app->results_mutex, FuriWaitForever);
     app->result_count = 0;
     app->scan_ap_count = 0;
-    app->scan_sta_count = 0;
     furi_mutex_release(app->results_mutex);
     s_shown = 0;
     s_rows_shown = 0;

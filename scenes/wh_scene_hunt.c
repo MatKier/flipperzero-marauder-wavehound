@@ -57,16 +57,18 @@ void wh_scene_hunt_on_enter(void* context) {
     s_awaiting_add = false;
     app->board_mode = WhBoardHunting;
 
-    const bool is_station = !t->is_ap && t->ap_index >= 0 && t->sta_index >= 0;
     wh_scene_hunt_apply_channel(app, t->channel);
 
-    if(is_station) {
-        wh_marauder_foxhunt_sta(app, t->ap_index, t->sta_index);
-    } else if(t->is_ap && t->mo_index >= 0) {
+    if(t->is_ap && t->mo_index >= 0) {
+        /* An AP is already in Marauder's list: hunt it by its index. */
         wh_marauder_foxhunt_ap(app, t->mo_index);
     } else {
-        /* Typed or saved MAC: add it to Marauder's AP list, then hunt by the
-         * index it reports back (handled in the feed timer). */
+        /* Anything else -- a station, a typed MAC, a saved MAC -- is hunted by
+         * adding it to Marauder's list and then `foxhunt -w <index>` (handled in
+         * the feed timer once "Added AP [n]" comes back). `foxhunt -w` matches
+         * the MAC as transmitter/receiver/BSSID, so it tracks a station's frames
+         * just as well, and it avoids `foxhunt -s`, whose station-index/
+         * association validation proved flaky. */
         app->pending_ap_index = -1;
         s_awaiting_add = true;
         wh_marauder_add_ap(app, t->mac, t->channel, t->name);
