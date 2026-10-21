@@ -30,8 +30,10 @@ static void format_label(const WhTarget* t, char* out, size_t size) {
         /* hidden networks have no SSID: show the BSSID */
         snprintf(out, size, "%d c%u %s", t->rssi, t->channel, t->name[0] ? t->name : t->mac);
     } else {
-        /* '*' marks a randomized (privacy) MAC */
-        snprintf(out, size, "%d c%u %s%s", t->rssi, t->channel, t->mac, t->randomized ? "*" : "");
+        /* Marauder's station scan reports no per-station RSSI, so there is no
+         * signal figure to show here (it appears once you hunt). '*' marks a
+         * randomized (privacy) MAC. */
+        snprintf(out, size, "c%u %s%s", t->channel, t->mac, t->randomized ? "*" : "");
     }
 }
 
