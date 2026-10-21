@@ -1,3 +1,14 @@
+## v2.0
+
+- Wavehound now targets stock **ESP32 Marauder firmware v1.19.0** instead of
+  the custom Wavehound board firmware. The app drives Marauder's serial CLI
+  (scanall / foxhunt / info). Fox hunting (access points, devices/stations and
+  typed MACs), live scanning, saved MACs and board info are preserved; the hunt
+  meter, graph and geiger clicks are derived on the Flipper from Marauder's
+  per-frame RSSI stream.
+- Removed the channel-spectrum sweep and the noise-floor readout: Marauder
+  exposes no serial equivalent for them.
+
 ## v1.11
 
 - Picking a result from a scan and then pressing Back now keeps the devices

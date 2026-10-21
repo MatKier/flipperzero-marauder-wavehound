@@ -1,11 +1,11 @@
 #include "../wavehound_i.h"
+#include "../wh_marauder.h"
 
 typedef enum {
     StartItemHuntAp,
     StartItemSearchDevices,
     StartItemEnterMac,
     StartItemSaved,
-    StartItemSpectrum,
     StartItemBoardInfo,
     StartItemSettings,
     StartItemAbout,
@@ -39,7 +39,6 @@ void wh_scene_start_on_enter(void* context) {
         submenu, "Hunt devices", StartItemSearchDevices, wh_scene_start_callback, app);
     submenu_add_item(submenu, "Enter MAC", StartItemEnterMac, wh_scene_start_callback, app);
     submenu_add_item(submenu, "Saved MACs", StartItemSaved, wh_scene_start_callback, app);
-    submenu_add_item(submenu, "Channel spectrum", StartItemSpectrum, wh_scene_start_callback, app);
     submenu_add_item(submenu, "Board info", StartItemBoardInfo, wh_scene_start_callback, app);
     submenu_add_item(submenu, "Settings", StartItemSettings, wh_scene_start_callback, app);
     submenu_add_item(submenu, "About / Help", StartItemAbout, wh_scene_start_callback, app);
@@ -53,11 +52,11 @@ bool wh_scene_start_on_event(void* context, SceneManagerEvent event) {
     WavehoundApp* app = context;
     if(event.type == SceneManagerEventTypeTick) {
         if(app->board_alive != s_header_alive) wh_scene_start_update_header(app);
-        /* The board idles dark after the SLEEP we send on exit, and the startup
-         * STOP can be lost before the link settles. Relight the idle LED once the
-         * board is confirmed alive (the menu is always a safe place to STOP). */
+        /* The startup stopscan can be lost before the link settles; re-send it
+         * once the board is confirmed alive (the menu is always a safe place to
+         * stop any leftover scan/hunt). */
         if(app->board_alive && !s_relit) {
-            wh_send(app, "STOP");
+            wh_marauder_stop(app);
             s_relit = true;
         }
         return false;
@@ -81,9 +80,6 @@ bool wh_scene_start_on_event(void* context, SceneManagerEvent event) {
         return true;
     case StartItemSaved:
         scene_manager_next_scene(app->scene_manager, WhSceneSaved);
-        return true;
-    case StartItemSpectrum:
-        scene_manager_next_scene(app->scene_manager, WhSceneSpectrum);
         return true;
     case StartItemBoardInfo:
         scene_manager_next_scene(app->scene_manager, WhSceneBoardInfo);

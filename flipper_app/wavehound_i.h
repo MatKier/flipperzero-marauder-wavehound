@@ -14,7 +14,6 @@
 
 #include "scenes/wh_scene.h"
 #include "views/wh_hunt_view.h"
-#include "views/wh_spectrum_view.h"
 #include "wh_settings.h"
 #include "wh_uart.h"
 
@@ -30,14 +29,21 @@ typedef enum {
     WhViewTextInput,
     WhViewWidget,
     WhViewHunt,
-    WhViewSpectrum,
     WhViewVarItemList,
 } WhViewId;
+
+/** What the board is currently doing, so the UART worker knows how to read each
+ * line (Marauder's replies are plain text and overlap between modes). */
+typedef enum {
+    WhBoardIdle,
+    WhBoardScanning, /* scanall: AP + station lines */
+    WhBoardHunting,  /* foxhunt: "<name> RSSI: <dBm>" samples */
+    WhBoardInfo,     /* info: "<label>: <value>" block */
+} WhBoardMode;
 
 typedef enum {
     WhEventMacEntered = 100,
     WhEventChannelPicked,
-    WhEventBoardInfoReady,
     WhEventSaveTarget,
     WhEventNameEntered,
     WhEventDetailsHunt,
@@ -76,9 +82,13 @@ typedef struct {
     bool is_ap;
     bool randomized; /* locally administered MAC */
     bool pin_channel; /* user chose the channel: board must not hop away */
+    /* Marauder refers to fox-hunt targets by their list index, not MAC. */
+    int16_t mo_index;  /* index in Marauder's AP list (-1 = none/typed MAC) */
+    int16_t ap_index;  /* for a station: its AP's index in Marauder's AP list */
+    int16_t sta_index; /* for a station: its index in Marauder's station list */
 } WhTarget;
 
-typedef struct {
+typedef struct WavehoundApp {
     Gui* gui;
     NotificationApp* notifications;
     ViewDispatcher* view_dispatcher;
@@ -90,7 +100,6 @@ typedef struct {
     Widget* widget;
     VariableItemList* var_item_list;
     WhHuntView* hunt;
-    WhSpectrumView* spectrum;
 
     WhSettings settings;
 
@@ -99,14 +108,27 @@ typedef struct {
     bool otg_enabled_by_us;
     bool board_alive;
 
-    /* Live scan results, written by the UART worker as DEV lines stream in. */
+    /* Marauder protocol state (see wh_marauder.c). */
+    WhBoardMode board_mode;      /* how the UART worker reads incoming lines */
+    uint16_t scan_ap_count;      /* APs seen this scan = next Marauder AP index */
+    uint16_t scan_sta_count;     /* stations seen this scan = next station index */
+    int16_t pending_ap_index;    /* index from "Added AP [n]" for a typed-MAC hunt */
+    uint8_t hunt_channel;        /* channel the hunt is parked on (0 = hopping) */
+
+    /* Fox-hunt RSSI accumulator: the worker adds each "RSSI:" sample here, the
+     * hunt scene's 100 ms timer drains it into the hunt view. Guarded by
+     * results_mutex. */
+    uint16_t hunt_frames;
+    int32_t hunt_sum;
+    int8_t hunt_last;
+    int8_t hunt_max;
+
+    /* Live scan results, written by the UART worker as scanall lines stream in.
+     * Marauder sends no "scan begin" line, so the list is cleared explicitly by
+     * the target-list scene, never from the worker. */
     FuriMutex* results_mutex;
     WhTarget results[WH_MAX_RESULTS];
     size_t result_count;
-    /* Pending DISCOVER_BEGINs that resume a scan: each keeps the results instead
-     * of clearing them (re-sent MACs update in place, so rows stay matched to
-     * their slot). A count, so back-to-back resumes can't lose one. */
-    uint8_t results_keep_begins;
 
     WhSearchKind search_kind;
 
@@ -148,6 +170,10 @@ void wh_send(WavehoundApp* app, const char* line);
 
 /** Parse "aa:bb:cc:dd:ee:ff" into bytes. Returns false on malformed input. */
 bool wh_parse_mac(const char* str, uint8_t mac[6]);
+
+/** Drain the fox-hunt RSSI accumulator into the hunt view as one sample. Called
+ * every 100 ms by the hunt scene's timer. */
+void wh_hunt_feed_flush(WavehoundApp* app);
 
 /** Fill app->settings with defaults, then overlay any stored values. */
 void wh_settings_load(WavehoundApp* app);
