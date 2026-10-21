@@ -17,7 +17,7 @@ sourcecode:
   type: git
   location:
     origin: https://github.com/MatKier/flipperzero-marauder-wavehound.git
-    commit_sha: fe73c069adf28da168ec78bb0fef37fab1790587
+    commit_sha: 521e5b7c73946842402706ede5f3de4e5d20827b
     subdir: .
 
 # Unmodified qFlipper screenshots. The first entry is used as the catalog
