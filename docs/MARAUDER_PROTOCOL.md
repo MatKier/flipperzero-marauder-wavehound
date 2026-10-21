@@ -59,3 +59,11 @@ Marauder exposes no serial equivalent for a per-channel **spectrum sweep** or a
 **noise-floor** reading, so those Wavehound features were removed. The hunt
 screen still shows avg/peak/trend/frames-per-second, all derived on the Flipper
 from the raw `RSSI:` stream.
+
+There is also **no way to pin the hunt to one channel**. `foxhunt` re-selects
+the channel on its own ~100 ms loop (target's channel while fresh, hop after
+~1.5 s of silence), and a `channel -s` sent from the app is overridden within a
+tick, so it can't hold. Marauder has no other per-MAC RSSI mode that stays on a
+fixed channel. The practical consequence: a **quiet target** (one that transmits
+only occasionally) is hard to hold, because the board spends most of its time
+hopping other channels and misses its sparse frames.
