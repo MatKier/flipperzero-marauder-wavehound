@@ -17,13 +17,20 @@
 #define WH_OUI_RECORD 32 /* 3-byte OUI + 29-byte NUL-padded name */
 #define WH_OUI_NAME 29
 
-/* Binary search a sorted fixed-width oui.db on the SD card, if present. */
-static bool lookup_file(const char* path, const uint8_t oui[3], char* out, size_t out_size) {
+/* Binary search a sorted fixed-width oui.db on the SD card, if present. Sets
+ * *have_db when the file could be opened. */
+static bool lookup_file(
+    const char* path,
+    const uint8_t oui[3],
+    char* out,
+    size_t out_size,
+    bool* have_db) {
     bool found = false;
     Storage* storage = furi_record_open(RECORD_STORAGE);
     File* f = storage_file_alloc(storage);
 
     if(storage_file_open(f, path, FSAM_READ, FSOM_OPEN_EXISTING)) {
+        *have_db = true;
         const uint64_t size = storage_file_size(f);
         size_t lo = 0;
         size_t hi = (size_t)(size / WH_OUI_RECORD);
@@ -60,8 +67,9 @@ void wh_oui_lookup(const uint8_t mac[6], char* out, size_t out_size) {
     out[0] = '\0';
 
     if(mac[0] & 0x01) {
-        /* Group/multicast address: not a real transmitter OUI. */
-        strlcpy(out, "—", out_size);
+        /* Group/multicast address: not a real transmitter OUI. (ASCII: the
+         * Flipper fonts have no em dash.) */
+        strlcpy(out, "multicast", out_size);
         return;
     }
     if(mac[0] & 0x02) {
@@ -71,7 +79,9 @@ void wh_oui_lookup(const uint8_t mac[6], char* out, size_t out_size) {
     }
 
     const uint8_t oui[3] = {mac[0], mac[1], mac[2]};
-    if(lookup_file(WH_OUI_DB_USER, oui, out, out_size)) return;
-    if(lookup_file(WH_OUI_DB_BUNDLED, oui, out, out_size)) return;
-    strlcpy(out, "Unknown", out_size);
+    bool have_db = false;
+    if(lookup_file(WH_OUI_DB_USER, oui, out, out_size, &have_db)) return;
+    if(lookup_file(WH_OUI_DB_BUNDLED, oui, out, out_size, &have_db)) return;
+    /* Tell "not in the database" apart from "no database installed". */
+    strlcpy(out, have_db ? "Unknown" : "no oui.db", out_size);
 }
